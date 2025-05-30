@@ -11,7 +11,7 @@ from langchain_core.messages import HumanMessage, AIMessage, SystemMessage
 from operator import itemgetter
 
 from models import get_openai_llm
-from prompts import get_fortune_rag_prompt, get_fortune_system_prompt
+from prompts import get_fortune_rag_prompt
 from reranker import get_flashrank_reranker, rerank_documents
 
 # 세션 기록을 저장할 딕셔너리
@@ -40,9 +40,25 @@ class RagPipeline:
         self.llm = llm
         self.reranker = reranker
         self.prompt = prompt or get_fortune_rag_prompt()
-        self.system_prompt = get_fortune_system_prompt()
         self.session_id = "default_session"
         self.chat_histories = {}  # 세션별 대화 기록 저장
+    
+    def _summarize_long_message(self, message: str, max_length: int = 200) -> str:
+        """
+        긴 메시지를 요약하는 함수
+        
+        Args:
+            message: 원본 메시지
+            max_length: 최대 길이
+            
+        Returns:
+            요약된 메시지
+        """
+        if len(message) <= max_length:
+            return message
+        
+        # 너무 긴 메시지는 앞부분만 유지하고 요약 표시
+        return message[:max_length] + "... (이전 대화 내용 요약)"
     
     def _format_chat_history(self, messages):
         """
@@ -62,11 +78,12 @@ class RagPipeline:
             if isinstance(message, HumanMessage):
                 formatted.append(f"사용자: {message.content}")
             elif isinstance(message, AIMessage):
-                formatted.append(f"AI: {message.content}")
+                # 긴 AI 메시지는 요약
+                formatted.append(f"AI: {self._summarize_long_message(message.content)}")
         
         return "\n".join(formatted)
     
-    def _get_context(self, query: str, top_k: int = 10) -> str:
+    def _get_context(self, query: str, top_k: int = 8) -> str:
         """
         검색 및 리랭킹을 수행하여 컨텍스트를 추출하는 함수
         
@@ -124,17 +141,8 @@ class RagPipeline:
             # 프롬프트 템플릿 적용
             prompt_value = self.prompt.format(**prompt_input)
             
-            # 대화 기록이 비어있는 경우(첫 대화인 경우) 시스템 프롬프트 적용
-            if not self.chat_histories[self.session_id]:
-                # LLM에 시스템 메시지 포함하여 호출
-                messages = [
-                    SystemMessage(content=self.system_prompt),
-                    HumanMessage(content=prompt_value)
-                ]
-                result = self.llm.invoke(messages).content
-            else:
-                # 일반적인 경우 프롬프트 템플릿만 사용
-                result = self.llm.invoke(prompt_value).content
+            # 모든 경우에 동일한 프롬프트 사용 (대화 시작 여부와 관계없이)
+            result = self.llm.invoke(prompt_value).content
             
             # 대화 기록 업데이트
             self.chat_histories[self.session_id].append(HumanMessage(content=query))

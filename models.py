@@ -3,6 +3,7 @@ from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_google_genai import ChatGoogleGenerativeAI
 from dotenv import load_dotenv
 import os
+import torch
 
 # 환경 변수 로드
 load_dotenv()
@@ -23,7 +24,7 @@ def get_openai_llm(model_name: str = "gpt-4o-mini"):
 def get_bge_embeddings():
     """BGE-M3 임베딩 모델을 초기화하고 반환합니다."""
     # 환경 변수에서 USE_CUDA 값을 확인하여 device 설정
-    device = "cuda" if os.environ.get("USE_CUDA", "False").lower() == "true" else "cpu"
+    device = "cuda" if torch.cuda.is_available() else "cpu"
     
     return HuggingFaceEmbeddings(
         model_name="BAAI/bge-m3",
