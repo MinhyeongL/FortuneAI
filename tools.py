@@ -10,11 +10,15 @@ import requests
 from bs4 import BeautifulSoup
 import time
 from urllib.parse import quote_plus
+import re
 
 # 기존 모듈들 import
 from vector_store import load_vector_store, get_all_documents
 from search import create_hybrid_retriever
 from reranker import get_flashrank_reranker, rerank_documents
+
+# 사주 계산 모듈 import
+from saju_calculator import SajuCalculator, format_saju_analysis
 
 class WebSearcher:
     """웹 검색 클래스"""
@@ -203,28 +207,148 @@ class ToolManager:
         
         @tool
         def analyze_birth_info(birth_info: str) -> str:
-            """생년월일시 정보를 바탕으로 사주팔자 관련 분석을 수행합니다. 생년월일시가 주어졌을 때 사용하세요."""
+            """생년월일시 정보를 바탕으로 정확한 사주팔자를 계산하고 분석합니다. 생년월일시가 주어졌을 때 사용하세요."""
             try:
-                # 사주팔자 계산 관련 지식 검색
-                query = f"사주팔자 분석 {birth_info} 년주 월주 일주 시주 오행 십신"
-                knowledge = search_saju_knowledge(query)
+                # 생년월일시 정보 파싱
+                birth_data = self._parse_birth_info(birth_info)
+                if not birth_data:
+                    return "생년월일시 정보를 정확히 파악할 수 없습니다. 예: 1995년 8월 26일 오전 10시 15분"
                 
-                return f"생년월일시 기반 사주 분석:\n{knowledge}"
+                # 사주 계산기 초기화
+                calculator = SajuCalculator()
+                
+                # 사주팔자 계산
+                saju_chart = calculator.calculate_saju(
+                    year=birth_data['year'],
+                    month=birth_data['month'], 
+                    day=birth_data['day'],
+                    hour=birth_data['hour'],
+                    minute=birth_data['minute'],
+                    is_male=birth_data.get('is_male', True)
+                )
+                
+                # 분석 결과 포맷팅
+                analysis_result = format_saju_analysis(saju_chart, calculator)
+                
+                # 추가 사주 지식 검색
+                day_master = saju_chart.get_day_master()
+                knowledge_query = f"사주 {day_master} 일간 성격 특성 운세"
+                knowledge = search_saju_knowledge.invoke(knowledge_query)
+                
+                return f"{analysis_result}\n\n=== 추가 사주 해석 ===\n{knowledge}"
+                
             except Exception as e:
                 return f"사주 분석 중 오류 발생: {str(e)}"
         
         @tool
-        def get_fortune_reading(topic: str, context_info: str = "") -> str:
-            """특정 주제(직업운, 재물운, 건강운, 애정운 등)에 대한 운세를 분석합니다."""
+        def get_fortune_reading(topic: str, birth_info: str = "", context_info: str = "") -> str:
+            """특정 주제(직업운, 재물운, 건강운, 애정운 등)에 대한 운세를 사주 기반으로 분석합니다."""
             try:
-                query = f"{topic} 운세 분석 {context_info} 사주 오행 십신"
-                knowledge = search_saju_knowledge(query)
+                result_parts = []
                 
-                return f"{topic} 운세 분석:\n{knowledge}"
+                # 생년월일시가 있으면 사주 기반 분석
+                if birth_info:
+                    birth_data = self._parse_birth_info(birth_info)
+                    if birth_data:
+                        calculator = SajuCalculator()
+                        saju_chart = calculator.calculate_saju(
+                            year=birth_data['year'], month=birth_data['month'], 
+                            day=birth_data['day'], hour=birth_data['hour'],
+                            minute=birth_data['minute'], is_male=birth_data.get('is_male', True)
+                        )
+                        
+                        day_master = saju_chart.get_day_master()
+                        ten_gods = calculator.analyze_ten_gods(saju_chart)
+                        elements = calculator.get_element_strength(saju_chart)
+                        
+                        # 사주 기반 운세 분석
+                        saju_analysis = f"""
+=== 사주 기반 {topic} 분석 ===
+일간: {day_master}
+오행 강약: {elements}
+십신 배치: {ten_gods}
+                        """
+                        result_parts.append(saju_analysis)
+                
+                # 전통 사주 지식 검색
+                query = f"{topic} 운세 분석 {context_info} 사주 오행 십신 {birth_info}"
+                knowledge = search_saju_knowledge.invoke(query)
+                result_parts.append(f"=== 전통 사주 지식 ===\n{knowledge}")
+                
+                return "\n\n".join(result_parts)
+                
             except Exception as e:
                 return f"운세 분석 중 오류 발생: {str(e)}"
         
         return [search_saju_knowledge, analyze_birth_info, get_fortune_reading]
+    
+    def _parse_birth_info(self, birth_info: str) -> Dict:
+        """생년월일시 정보 파싱"""
+        try:
+            # 정규식으로 생년월일시 추출
+            # 예: "1995년 8월 26일 오전 10시 15분", "1995-08-26 10:15"
+            
+            # 년도 추출
+            year_match = re.search(r'(\d{4})년?', birth_info)
+            if not year_match:
+                return None
+            year = int(year_match.group(1))
+            
+            # 월 추출
+            month_match = re.search(r'(\d{1,2})월', birth_info)
+            if not month_match:
+                return None
+            month = int(month_match.group(1))
+            
+            # 일 추출
+            day_match = re.search(r'(\d{1,2})일', birth_info)
+            if not day_match:
+                return None
+            day = int(day_match.group(1))
+            
+            # 시간 추출
+            hour = 12  # 기본값
+            minute = 0  # 기본값
+            
+            # 오전/오후 처리
+            if '오전' in birth_info or 'AM' in birth_info.upper():
+                hour_match = re.search(r'오전\s*(\d{1,2})시?', birth_info)
+                if hour_match:
+                    hour = int(hour_match.group(1))
+                    if hour == 12:
+                        hour = 0
+            elif '오후' in birth_info or 'PM' in birth_info.upper():
+                hour_match = re.search(r'오후\s*(\d{1,2})시?', birth_info)
+                if hour_match:
+                    hour = int(hour_match.group(1))
+                    if hour != 12:
+                        hour += 12
+            else:
+                # 24시간 형식
+                hour_match = re.search(r'(\d{1,2})시', birth_info)
+                if hour_match:
+                    hour = int(hour_match.group(1))
+            
+            # 분 추출
+            minute_match = re.search(r'(\d{1,2})분', birth_info)
+            if minute_match:
+                minute = int(minute_match.group(1))
+            
+            # 성별 추출
+            is_male = True  # 기본값
+            if '여자' in birth_info or '여성' in birth_info or '여' in birth_info:
+                is_male = False
+            elif '남자' in birth_info or '남성' in birth_info or '남' in birth_info:
+                is_male = True
+            
+            return {
+                'year': year, 'month': month, 'day': day,
+                'hour': hour, 'minute': minute, 'is_male': is_male
+            }
+            
+        except Exception as e:
+            print(f"생년월일시 파싱 오류: {e}")
+            return None
     
     def _get_web_tools(self) -> List[Tool]:
         """웹 검색 기반 도구들 반환"""
