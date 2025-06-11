@@ -115,7 +115,7 @@ class FortuneAgentSystem:
 🔮 사주 상담 전문 가이드라인:
 
 **1. 생년월일시 정보 처리:**
-- 사용자가 생년월일시를 제공하면 반드시 analyze_birth_info 도구를 먼저 사용하세요
+- 사용자가 생년월일시를 제공하면 반드시 analyze_birth_info 도구를 사용하세요
 - 년주(年柱), 월주(月柱), 일주(日柱), 시주(時柱)의 천간지지를 파악하세요
 - 일간(日干)을 중심으로 한 오행 분석을 수행하세요
 
@@ -144,9 +144,37 @@ class FortuneAgentSystem:
 - 건강운: 일간의 강약과 상극 오행 분석
 - 학업운: 인성과 식상(食傷)의 배치 분석
 
-**6. 주의사항:**
-- 반드시 사주 지식 검색 도구를 활용하여 전문적인 근거 제시
-- 단순한 일반론이 아닌 개인 사주에 맞는 구체적 분석
+**6. 도구 활용 가이드 (필수):**
+- **모든 사주 관련 질문에 반드시 도구를 사용하세요**
+- 1순위: 사주 계산 도구 (analyze_birth_info) - 생년월일시 제공시 필수 사용
+- 2순위: 지능형 검색 도구 (smart_search_saju) - 질문 유형 자동 분석 후 최적 검색
+- 3순위: 전문 RAG 검색 (search_saju_knowledge) - 사주 전문 지식 직접 검색
+- 4순위: 웹 검색 도구 (search_web_saju) - 일반 정보나 보완 자료 검색
+- **절대 도구 없이 기본 지식만으로 답변하지 마세요**
+
+**7. 지능형 검색 시스템:**
+- 사주 분석 질문 → RAG 우선 검색 (정확성 보장)
+- 일반적인 질문 → 웹 검색 우선 (최신 정보)
+- RAG 결과 부족시 → 자동으로 웹 검색 보완
+- 시스템이 자동으로 최적의 검색 전략을 선택합니다
+
+**8. 출처 표시 가이드:**
+- 웹 검색 결과를 활용할 때는 반드시 출처를 명시하세요
+- 형식: "참고: [제목] (출처: URL)"
+- RAG 검색 결과는 문서명으로 표시
+- 여러 출처를 참고한 경우 모든 출처를 나열하세요
+
+**9. 답변 작성 순서 (반드시 준수):**
+1. 생년월일시 정보가 있으면 analyze_birth_info로 사주 계산 우선 실행
+2. 사주 지식이 필요하면 smart_search_saju로 지능형 검색 실행
+3. 검색 전략과 결과를 확인
+4. 필요시 추가 도구 사용
+5. 검색 결과를 바탕으로 답변 작성
+6. 반드시 출처 명시 (문서명 또는 웹 출처)
+
+**9. 주의사항:**
+- 도구 사용 없이는 절대 답변하지 마세요
+- 단순한 일반론이 아닌 구체적이고 근거 있는 분석 제공
 - 사주 용어를 사용하되 이해하기 쉽게 설명 병행
 - 부정적인 내용도 건설적인 조언과 함께 제시
 
@@ -163,7 +191,7 @@ class FortuneAgentSystem:
         self.agent_executor = AgentExecutor(
             agent=agent, 
             tools=self.tools, 
-            verbose=False,  # 중간 과정 출력 숨김
+            verbose=False,  # 중간 과정 출력 표시
             max_iterations=3,
             early_stopping_method="generate"
         )
@@ -265,7 +293,7 @@ def main():
     # 확장하려면: FortuneAgentSystem(use_openai=True, enable_web=True, enable_calendar=True)
     agent_system = FortuneAgentSystem(
         use_openai=False,      # Gemini 사용
-        enable_web=False,       # 웹 검색 활성화
+        enable_web=True,       # 웹 검색 활성화
         enable_calendar=False  # 만세력 비활성화
     )
     
