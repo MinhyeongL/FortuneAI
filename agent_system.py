@@ -146,7 +146,13 @@ class FortuneAgentSystem:
 
 **6. 도구 활용 가이드 (필수):**
 - **모든 사주 관련 질문에 반드시 도구를 사용하세요**
-- 1순위: 사주 계산 도구 (analyze_birth_info) - 생년월일시 제공시 필수 사용
+- 1순위: 사주 계산 도구들 - 생년월일시 제공시 필수 사용
+  * get_comprehensive_saju_analysis: 종합 사주 분석 (가장 많이 사용)
+  * calculate_saju_chart: 기본 사주팔자만 계산
+  * analyze_five_elements: 오행 강약 분석
+  * analyze_ten_gods: 십신 분석
+  * calculate_great_fortune: 대운 계산
+  * 주의: 모든 도구는 생년월일시 문자열에서 성별을 자동 파싱합니다 ('남성', '여성', '남', '여' 키워드 인식)
 - 2순위: 지능형 검색 도구 (smart_search_saju) - 질문 유형 자동 분석 후 최적 검색
 - 3순위: 전문 RAG 검색 (search_saju_knowledge) - 사주 전문 지식 직접 검색
 - 4순위: 웹 검색 도구 (search_web_saju) - 일반 정보나 보완 자료 검색
@@ -165,12 +171,13 @@ class FortuneAgentSystem:
 - 여러 출처를 참고한 경우 모든 출처를 나열하세요
 
 **9. 답변 작성 순서 (반드시 준수):**
-1. 생년월일시 정보가 있으면 analyze_birth_info로 사주 계산 우선 실행
-2. 사주 지식이 필요하면 smart_search_saju로 지능형 검색 실행
-3. 검색 전략과 결과를 확인
-4. 필요시 추가 도구 사용
-5. 검색 결과를 바탕으로 답변 작성
-6. 반드시 출처 명시 (문서명 또는 웹 출처)
+1. 생년월일시 정보가 있으면 get_comprehensive_saju_analysis로 종합 사주 분석 우선 실행
+2. 특정 분야만 필요하면 해당 전문 도구 사용 (오행, 십신, 대운 등)
+3. 사주 지식이 필요하면 smart_search_saju로 지능형 검색 실행
+4. 검색 전략과 결과를 확인
+5. 필요시 추가 도구 사용 (웹 검색 등)
+6. 계산 결과와 검색 결과를 종합하여 답변 작성
+7. 반드시 출처 명시 (문서명 또는 웹 출처)
 
 **9. 주의사항:**
 - 도구 사용 없이는 절대 답변하지 마세요
@@ -282,7 +289,7 @@ class FortuneAgentSystem:
         print(f"🛠️ 활성화된 도구 수: {tool_info['total_tools']}개")
         print(f"🔧 RAG 도구: {'활성화' if tool_info['rag_enabled'] else '비활성화'}")
         print(f"🌐 웹 검색: {'활성화' if tool_info['web_enabled'] else '비활성화'}")
-        print(f"📅 만세력: {'활성화' if tool_info['calendar_enabled'] else '비활성화'}")
+        print(f"🧮 사주 계산: {'활성화' if tool_info['calendar_enabled'] else '비활성화'}")
         print("=" * 40)
 
 def main():
@@ -294,7 +301,7 @@ def main():
     agent_system = FortuneAgentSystem(
         use_openai=False,      # Gemini 사용
         enable_web=True,       # 웹 검색 활성화
-        enable_calendar=False  # 만세력 비활성화
+        enable_calendar=True   # 사주 계산 도구 활성화
     )
     
     # 시스템 정보 출력

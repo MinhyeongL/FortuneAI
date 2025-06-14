@@ -476,43 +476,8 @@ class ToolManager:
             except Exception as e:
                 # 에러 시 기본 RAG 검색으로 폴백
                 return search_saju_knowledge.func(query)
-        
-        @tool
-        def analyze_birth_info(birth_info: str) -> str:
-            """생년월일시 정보를 바탕으로 정확한 사주팔자를 계산하고 분석합니다. 생년월일시가 주어졌을 때 사용하세요."""
-            try:
-                # 생년월일시 정보 파싱
-                birth_data = self._parse_birth_info(birth_info)
-                if not birth_data:
-                    return "생년월일시 정보를 정확히 파악할 수 없습니다. 예: 1995년 8월 26일 오전 10시 15분"
-                
-                # 사주 계산기 초기화
-                calculator = SajuCalculator()
-                
-                # 사주팔자 계산
-                saju_chart = calculator.calculate_saju(
-                    year=birth_data['year'],
-                    month=birth_data['month'], 
-                    day=birth_data['day'],
-                    hour=birth_data['hour'],
-                    minute=birth_data['minute'],
-                    is_male=birth_data.get('is_male', True)
-                )
-                
-                # 분석 결과 포맷팅
-                analysis_result = format_saju_analysis(saju_chart, calculator)
-                
-                # 추가 사주 지식 검색
-                day_master = saju_chart.get_day_master()
-                knowledge_query = f"사주 {day_master} 일간 성격 특성 운세"
-                knowledge = search_saju_knowledge.func(knowledge_query)
-                
-                return f"{analysis_result}\n\n=== 추가 사주 해석 ===\n{knowledge}"
-                
-            except Exception as e:
-                return f"사주 분석 중 오류 발생: {str(e)}"
 
-        return [search_saju_knowledge, smart_search_saju, analyze_birth_info]
+        return [search_saju_knowledge, smart_search_saju]
     
     def _parse_birth_info(self, birth_info: str) -> Dict:
         """생년월일시 정보 파싱"""
@@ -610,27 +575,200 @@ class ToolManager:
         return [search_web_saju]
     
     def _get_calendar_tools(self) -> List[Tool]:
-        """만세력 기반 도구들 반환"""
+        """사주 계산 도구들 반환"""
         
         @tool
-        def calculate_saju_pillars(birth_year: int, birth_month: int, birth_day: int, birth_hour: int, is_lunar: bool = False) -> str:
-            """생년월일시를 바탕으로 정확한 사주팔자를 계산합니다."""
-            # TODO: 실제 만세력 API 연동
-            return f"사주팔자 계산 결과 (미구현): {birth_year}년 {birth_month}월 {birth_day}일 {birth_hour}시"
+        def parse_birth_info(birth_info: str) -> str:
+            """생년월일시 정보를 파싱하여 구조화된 데이터로 변환합니다. 예: '1995년 8월 26일 오전 10시 15분'"""
+            try:
+                birth_data = self._parse_birth_info(birth_info)
+                if not birth_data:
+                    return "생년월일시 정보를 정확히 파악할 수 없습니다. 예: 1995년 8월 26일 오전 10시 15분"
+                
+                return f"""파싱된 생년월일시 정보:
+- 년도: {birth_data['year']}년
+- 월: {birth_data['month']}월  
+- 일: {birth_data['day']}일
+- 시간: {birth_data['hour']}시 {birth_data['minute']}분
+- 성별: {'남성' if birth_data['is_male'] else '여성'}"""
+                
+            except Exception as e:
+                return f"생년월일시 파싱 중 오류 발생: {str(e)}"
         
         @tool
-        def get_lunar_calendar(solar_date: str) -> str:
-            """양력 날짜를 음력으로 변환합니다."""
-            # TODO: 음력 변환 API 연동
-            return f"음력 변환 결과 (미구현): {solar_date}"
+        def calculate_saju_chart(birth_info: str) -> str:
+            """생년월일시를 바탕으로 정확한 사주팔자를 계산합니다. 사주 기본 구조만 계산하고 해석은 별도 도구를 사용하세요."""
+            try:
+                # 생년월일시 정보 파싱
+                birth_data = self._parse_birth_info(birth_info)
+                if not birth_data:
+                    return "생년월일시 정보를 정확히 파악할 수 없습니다. 예: 1995년 8월 26일 오전 10시 15분"
+                
+                # 사주 계산기 초기화
+                calculator = SajuCalculator()
+                
+                # 사주팔자 계산
+                saju_chart = calculator.calculate_saju(
+                    year=birth_data['year'],
+                    month=birth_data['month'], 
+                    day=birth_data['day'],
+                    hour=birth_data['hour'],
+                    minute=birth_data['minute'],
+                    is_male=birth_data.get('is_male', True)
+                )
+                
+                # 기본 사주팔자만 반환 (해석 제외)
+                result = []
+                result.append("=== 사주팔자 계산 결과 ===")
+                result.append(f"년주(年柱): {saju_chart.year_pillar}")
+                result.append(f"월주(月柱): {saju_chart.month_pillar}")
+                result.append(f"일주(日柱): {saju_chart.day_pillar}")
+                result.append(f"시주(時柱): {saju_chart.hour_pillar}")
+                result.append(f"일간(日干): {saju_chart.get_day_master()}")
+                
+                return "\n".join(result)
+                
+            except Exception as e:
+                return f"사주 계산 중 오류 발생: {str(e)}"
         
         @tool
-        def calculate_compatibility(person1_birth: str, person2_birth: str) -> str:
-            """두 사람의 사주팔자 궁합을 계산합니다."""
-            # TODO: 궁합 계산 로직 구현
-            return f"궁합 계산 결과 (미구현): {person1_birth} vs {person2_birth}"
+        def analyze_five_elements(birth_info: str) -> str:
+            """사주팔자의 오행 강약을 분석합니다. 먼저 calculate_saju_chart로 사주를 계산한 후 사용하세요."""
+            try:
+                # 생년월일시 정보 파싱
+                birth_data = self._parse_birth_info(birth_info)
+                if not birth_data:
+                    return "생년월일시 정보를 정확히 파악할 수 없습니다."
+                
+                # 사주 계산
+                calculator = SajuCalculator()
+                saju_chart = calculator.calculate_saju(
+                    year=birth_data['year'],
+                    month=birth_data['month'], 
+                    day=birth_data['day'],
+                    hour=birth_data['hour'],
+                    minute=birth_data['minute'],
+                    is_male=birth_data.get('is_male', True)
+                )
+                
+                # 오행 분석
+                elements = calculator.get_element_strength(saju_chart)
+                
+                result = []
+                result.append("=== 오행 강약 분석 ===")
+                for element, strength in elements.items():
+                    result.append(f"{element}: {strength}점")
+                
+                # 오행 균형 평가
+                max_element = max(elements, key=elements.get)
+                min_element = min(elements, key=elements.get)
+                result.append(f"\n가장 강한 오행: {max_element} ({elements[max_element]}점)")
+                result.append(f"가장 약한 오행: {min_element} ({elements[min_element]}점)")
+                
+                return "\n".join(result)
+                
+            except Exception as e:
+                return f"오행 분석 중 오류 발생: {str(e)}"
         
-        return [calculate_saju_pillars, get_lunar_calendar, calculate_compatibility]
+        @tool
+        def analyze_ten_gods(birth_info: str) -> str:
+            """사주팔자의 십신을 분석합니다. 먼저 calculate_saju_chart로 사주를 계산한 후 사용하세요."""
+            try:
+                # 생년월일시 정보 파싱
+                birth_data = self._parse_birth_info(birth_info)
+                if not birth_data:
+                    return "생년월일시 정보를 정확히 파악할 수 없습니다."
+                
+                # 사주 계산
+                calculator = SajuCalculator()
+                saju_chart = calculator.calculate_saju(
+                    year=birth_data['year'],
+                    month=birth_data['month'], 
+                    day=birth_data['day'],
+                    hour=birth_data['hour'],
+                    minute=birth_data['minute'],
+                    is_male=birth_data.get('is_male', True)
+                )
+                
+                # 십신 분석
+                ten_gods = calculator.analyze_ten_gods(saju_chart)
+                
+                result = []
+                result.append("=== 십신 분석 ===")
+                for pillar_name, gods in ten_gods.items():
+                    if gods:
+                        result.append(f"{pillar_name}: {', '.join(gods)}")
+                
+                return "\n".join(result)
+                
+            except Exception as e:
+                return f"십신 분석 중 오류 발생: {str(e)}"
+        
+        @tool
+        def calculate_great_fortune(birth_info: str) -> str:
+            """대운을 계산합니다. 먼저 calculate_saju_chart로 사주를 계산한 후 사용하세요."""
+            try:
+                # 생년월일시 정보 파싱
+                birth_data = self._parse_birth_info(birth_info)
+                if not birth_data:
+                    return "생년월일시 정보를 정확히 파악할 수 없습니다."
+                
+                # 사주 계산
+                calculator = SajuCalculator()
+                saju_chart = calculator.calculate_saju(
+                    year=birth_data['year'],
+                    month=birth_data['month'], 
+                    day=birth_data['day'],
+                    hour=birth_data['hour'],
+                    minute=birth_data['minute'],
+                    is_male=birth_data.get('is_male', True)
+                )
+                
+                # 대운 계산
+                great_fortunes = calculator.calculate_great_fortune_improved(saju_chart)
+                
+                result = []
+                result.append("=== 대운 계산 ===")
+                for gf in great_fortunes:
+                    result.append(f"{gf['age']}세: {gf['pillar']} ({gf['years']}) - {gf['direction']}")
+                
+                return "\n".join(result)
+                
+            except Exception as e:
+                return f"대운 계산 중 오류 발생: {str(e)}"
+        
+        @tool
+        def get_comprehensive_saju_analysis(birth_info: str) -> str:
+            """생년월일시를 바탕으로 종합적인 사주 분석을 수행합니다. 성별 정보도 자동으로 파싱하여 대운 계산에 반영합니다. 예: '1995년 8월 26일 오전 10시 15분 남성'"""
+            try:
+                # 생년월일시 정보 파싱
+                birth_data = self._parse_birth_info(birth_info)
+                if not birth_data:
+                    return "생년월일시 정보를 정확히 파악할 수 없습니다. 예: 1995년 8월 26일 오전 10시 15분"
+                
+                # 사주 계산기 초기화
+                calculator = SajuCalculator()
+                
+                # 사주팔자 계산
+                saju_chart = calculator.calculate_saju(
+                    year=birth_data['year'],
+                    month=birth_data['month'], 
+                    day=birth_data['day'],
+                    hour=birth_data['hour'],
+                    minute=birth_data['minute'],
+                    is_male=birth_data.get('is_male', True)
+                )
+                
+                # 종합 분석 결과 포맷팅
+                analysis_result = format_saju_analysis(saju_chart, calculator)
+                
+                return analysis_result
+                
+            except Exception as e:
+                return f"종합 사주 분석 중 오류 발생: {str(e)}"
+        
+        return [parse_birth_info, calculate_saju_chart, analyze_five_elements, 
+                analyze_ten_gods, calculate_great_fortune, get_comprehensive_saju_analysis]
     
     def get_tools(self) -> List[Tool]:
         """모든 활성화된 도구들 반환"""
