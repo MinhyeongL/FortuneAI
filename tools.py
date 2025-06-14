@@ -651,15 +651,25 @@ class ToolManager:
                     is_male=birth_data.get('is_male', True)
                 )
                 
-                # 오행 분석
+                # 오행 분석 (현대 정밀 방식)
                 elements = calculator.get_element_strength(saju_chart)
+                elements_balanced = calculator.get_element_strength_balanced(saju_chart)
+                elements_simple = calculator.get_element_strength_simple(saju_chart)
                 
                 result = []
-                result.append("=== 오행 강약 분석 ===")
+                result.append("=== 오행 강약 분석 (정밀 분석) ===")
                 for element, strength in elements.items():
                     result.append(f"{element}: {strength}점")
                 
-                # 오행 균형 평가
+                result.append("\n=== 오행 강약 분석 (8점 절충 방식) ===")
+                for element, strength in elements_balanced.items():
+                    result.append(f"{element}: {strength}점")
+                
+                result.append("\n=== 오행 강약 분석 (전통 8점 방식) ===")
+                for element, strength in elements_simple.items():
+                    result.append(f"{element}: {strength}점")
+                
+                # 오행 균형 평가 (정밀 분석 기준)
                 max_element = max(elements, key=elements.get)
                 min_element = min(elements, key=elements.get)
                 result.append(f"\n가장 강한 오행: {max_element} ({elements[max_element]}점)")

@@ -569,9 +569,75 @@ class SajuCalculator:
         
         return great_fortunes
     
-    def get_element_strength(self, saju_chart: SajuChart) -> Dict[str, int]:
+    def get_element_strength(self, saju_chart: SajuChart) -> Dict[str, float]:
         """
-        오행 강약 분석 (전통 8점 방식) - 단순 전통 방식
+        오행 강약 분석 (현대 정밀 방식) - 지장간 완전 반영
+        
+        Args:
+            saju_chart: 사주팔자 차트
+        
+        Returns:
+            Dict[str, float]: 오행별 점수 (지장간 완전 반영, 가장 정확한 분석)
+        """
+        elements = {"목": 0.0, "화": 0.0, "토": 0.0, "금": 0.0, "수": 0.0}
+        
+        pillars = [saju_chart.year_pillar, saju_chart.month_pillar, 
+                  saju_chart.day_pillar, saju_chart.hour_pillar]
+        
+        for pillar in pillars:
+            # 천간 1점
+            stem_element = self.five_elements[pillar.heavenly_stem]
+            elements[stem_element] += 1.0
+            
+            # 지지 - 지장간 비율에 따라 점수 배분 (천간과 별도)
+            hidden_stems = self.hidden_stems[pillar.earthly_branch]
+            for hidden_stem, ratio in hidden_stems:
+                hidden_element = self.five_elements[hidden_stem]
+                # 비율에 따라 점수 배분 (100% = 1점)
+                elements[hidden_element] += ratio / 100.0
+        
+        # 소수점 1자리로 반올림
+        for element in elements:
+            elements[element] = round(elements[element], 1)
+        
+        return elements
+    
+    def get_element_strength_balanced(self, saju_chart: SajuChart) -> Dict[str, float]:
+        """
+        오행 강약 분석 (8점 유지 + 지장간 비율) - 전통과 현대의 절충
+        
+        Args:
+            saju_chart: 사주팔자 차트
+        
+        Returns:
+            Dict[str, float]: 오행별 점수 (총 8점 유지하면서 지장간 비율 반영)
+        """
+        elements = {"목": 0.0, "화": 0.0, "토": 0.0, "금": 0.0, "수": 0.0}
+        
+        pillars = [saju_chart.year_pillar, saju_chart.month_pillar, 
+                  saju_chart.day_pillar, saju_chart.hour_pillar]
+        
+        for pillar in pillars:
+            # 천간 1점
+            stem_element = self.five_elements[pillar.heavenly_stem]
+            elements[stem_element] += 1.0
+            
+            # 지지 1점을 지장간 비율에 따라 배분
+            hidden_stems = self.hidden_stems[pillar.earthly_branch]
+            for hidden_stem, ratio in hidden_stems:
+                hidden_element = self.five_elements[hidden_stem]
+                # 지지 1점을 비율에 따라 배분 (총 1점 유지)
+                elements[hidden_element] += (ratio / 100.0) * 1.0
+        
+        # 소수점 1자리로 반올림
+        for element in elements:
+            elements[element] = round(elements[element], 1)
+        
+        return elements
+    
+    def get_element_strength_simple(self, saju_chart: SajuChart) -> Dict[str, int]:
+        """
+        오행 강약 분석 (전통 8점 방식) - 기존 단순 방식 유지
         
         Args:
             saju_chart: 사주팔자 차트
@@ -617,10 +683,22 @@ def format_saju_analysis(saju_chart: SajuChart, calculator: SajuCalculator) -> s
     analysis.append(f"일간(日干): {saju_chart.get_day_master()}")
     analysis.append("")
     
-    # 오행 분석
+    # 오행 분석 (현대 정밀 방식 - 기본)
     elements = calculator.get_element_strength(saju_chart)
-    analysis.append("=== 오행 강약 ===")
+    analysis.append("=== 오행 강약 (정밀 분석) ===")
     for element, strength in elements.items():
+        analysis.append(f"{element}: {strength}점")
+    
+    # 8점 절충 방식도 참고용으로 표시
+    elements_balanced = calculator.get_element_strength_balanced(saju_chart)
+    analysis.append("\n=== 오행 강약 (8점 절충 방식) ===")
+    for element, strength in elements_balanced.items():
+        analysis.append(f"{element}: {strength}점")
+    
+    # 전통 8점 방식도 참고용으로 표시
+    elements_simple = calculator.get_element_strength_simple(saju_chart)
+    analysis.append("\n=== 오행 강약 (전통 8점 방식) ===")
+    for element, strength in elements_simple.items():
         analysis.append(f"{element}: {strength}점")
     analysis.append("")
     
