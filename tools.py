@@ -19,21 +19,43 @@ from reranker import get_flashrank_reranker, rerank_documents
 
 # 사주 계산 모듈 import
 from saju_calculator import SajuCalculator, format_saju_analysis
+from typing import Dict
 
 class WebSearcher:
-    """웹 검색 클래스"""
+    """사주 관련 일반 지식 웹 검색 클래스"""
     
     def __init__(self):
         self.session = requests.Session()
         self.session.headers.update({
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
         })
+        
+        # 사주 관련 핵심 키워드
+        self.saju_keywords = [
+            '명리학', '사주명리', '음양오행', '십간십이지', '육십갑자',
+            '십신', '용신', '희신', '기신', '원진살', '공망',
+            '대운', '세운', '월운', '일운', '시운',
+            '정관', '편관', '정재', '편재', '식신', '상관',
+            '비견', '겁재', '정인', '편인', '천간', '지지',
+            '오행', '상생', '상극', '합', '충', '형', '해'
+        ]
+    
+    def enhance_search_query(self, query: str) -> str:
+        """검색 쿼리를 사주 관련 검색에 최적화"""
+        enhanced_query = query
+        
+        # 이미 사주 관련 키워드가 포함되어 있지 않으면 추가
+        if not any(keyword in query for keyword in ['사주', '명리', '팔자']):
+            enhanced_query += ' 사주 명리학'
+        
+        return enhanced_query
     
     def search_duckduckgo(self, query: str, max_results: int = 5) -> List[Dict[str, str]]:
-        """DuckDuckGo를 사용한 웹 검색"""
+        """DuckDuckGo를 사용한 사주 관련 웹 검색"""
         try:
-            # DuckDuckGo 검색 URL
-            search_url = f"https://html.duckduckgo.com/html/?q={quote_plus(query)}"
+            # 검색 쿼리 최적화
+            enhanced_query = self.enhance_search_query(query)
+            search_url = f"https://html.duckduckgo.com/html/?q={quote_plus(enhanced_query)}"
             
             response = self.session.get(search_url, timeout=10)
             response.raise_for_status()
@@ -51,20 +73,51 @@ class WebSearcher:
                     url = title_elem.get('href', '')
                     snippet = snippet_elem.get_text(strip=True) if snippet_elem else ""
                     
+                    # 사주 관련성 점수 계산
+                    relevance_score = self.calculate_relevance(title, snippet, query)
+                    
                     results.append({
                         'title': title,
                         'url': url,
-                        'snippet': snippet
+                        'snippet': snippet,
+                        'relevance_score': relevance_score
                     })
             
+            # 관련성 점수로 정렬
+            results.sort(key=lambda x: x['relevance_score'], reverse=True)
             return results
             
         except Exception as e:
             print(f"웹 검색 오류: {e}")
             return []
     
-    def get_page_content(self, url: str, max_chars: int = 1000) -> str:
-        """웹 페이지 내용 가져오기"""
+    def calculate_relevance(self, title: str, snippet: str, original_query: str) -> float:
+        """검색 결과의 사주 관련성 점수 계산"""
+        score = 0.0
+        text = (title + " " + snippet).lower()
+        query_lower = original_query.lower()
+        
+        # 기본 사주 키워드 매칭
+        basic_keywords = ['사주', '명리', '팔자', '운세', '명식', '사주명리']
+        for keyword in basic_keywords:
+            if keyword in text:
+                score += 2.0
+        
+        # 사주 전문 용어 매칭
+        for keyword in self.saju_keywords:
+            if keyword in text:
+                score += 1.5
+        
+        # 원본 쿼리와의 유사성
+        query_words = query_lower.split()
+        for word in query_words:
+            if word in text:
+                score += 1.0
+        
+        return score
+    
+    def get_page_content(self, url: str, max_chars: int = 1500) -> str:
+        """웹 페이지 내용 가져오기 - 사주 관련 내용 중심으로"""
         try:
             response = self.session.get(url, timeout=10)
             response.raise_for_status()
@@ -72,20 +125,205 @@ class WebSearcher:
             soup = BeautifulSoup(response.text, 'html.parser')
             
             # 불필요한 태그 제거
-            for tag in soup(['script', 'style', 'nav', 'header', 'footer']):
+            for tag in soup(['script', 'style', 'nav', 'header', 'footer', 'aside', 'advertisement']):
                 tag.decompose()
             
             # 텍스트 추출
             text = soup.get_text(separator=' ', strip=True)
             
-            # 길이 제한
-            if len(text) > max_chars:
-                text = text[:max_chars] + "..."
+            # 사주 관련 내용 우선 추출
+            sentences = text.split('.')
+            relevant_sentences = []
             
-            return text
+            for sentence in sentences:
+                if any(keyword in sentence for keyword in ['사주', '명리', '팔자', '운세'] + self.saju_keywords):
+                    relevant_sentences.append(sentence.strip())
+            
+            # 관련 문장이 있으면 우선 사용, 없으면 전체 텍스트 사용
+            if relevant_sentences:
+                filtered_text = '. '.join(relevant_sentences[:10])  # 최대 10문장
+            else:
+                filtered_text = text
+            
+            # 길이 제한
+            if len(filtered_text) > max_chars:
+                filtered_text = filtered_text[:max_chars] + "..."
+            
+            return filtered_text
             
         except Exception as e:
             return f"페이지 내용을 가져올 수 없습니다: {e}"
+    
+    def search_with_content(self, query: str, max_results: int = 3) -> List[Dict[str, str]]:
+        """검색 결과와 함께 페이지 내용도 가져오기"""
+        search_results = self.search_duckduckgo(query, max_results)
+        
+        for result in search_results:
+            if result['url']:
+                content = self.get_page_content(result['url'])
+                result['content'] = content
+        
+        return search_results
+
+class SmartSearchOrchestrator:
+    """지능형 검색 오케스트레이터 - 질문 유형에 따라 최적의 검색 전략 결정"""
+    
+    def __init__(self, rag_search_func, web_search_func):
+        self.rag_search = rag_search_func
+        self.web_search = web_search_func
+        
+        # 사주 전문 용어 키워드
+        self.saju_keywords = [
+            '사주', '명리', '팔자', '운세', '천간', '지지', '간지', '육십갑자',
+            '십신', '십성', '오행', '음양', '상생', '상극', '합', '충', '형', '해',
+            '대운', '세운', '월운', '일운', '용신', '희신', '기신', '원진살',
+            '정관', '편관', '정재', '편재', '식신', '상관', '비견', '겁재', '정인', '편인',
+            '년주', '월주', '일주', '시주', '일간', '월령', '계절', '생시',
+            '갑', '을', '병', '정', '무', '기', '경', '신', '임', '계',
+            '자', '축', '인', '묘', '진', '사', '오', '미', '신', '유', '술', '해',
+            '목', '화', '토', '금', '수', '장생', '목욕', '관대', '건록', '제왕',
+            '공망', '도화', '역마', '천을귀인', '태극귀인', '문창', '문곡'
+        ]
+        
+        # 일반 상담 키워드  
+        self.general_keywords = [
+            '안녕', '인사', '소개', '설명', '뭐야', '무엇', '어떻게', '왜',
+            '현재', '요즘', '최근', '트렌드', '뉴스', '정보', '방법',
+            '추천', '조언', '의견', '생각', '어떨까', '어때'
+        ]
+    
+    def classify_query(self, query: str) -> str:
+        """질문 유형 분류"""
+        query_lower = query.lower()
+        
+        # 1. 생년월일시 정보가 포함된 경우 → 사주 분석
+        birth_patterns = [
+            r'\d{4}년.*\d{1,2}월.*\d{1,2}일',  # 1995년 8월 26일
+            r'\d{4}-\d{1,2}-\d{1,2}',          # 1995-08-26
+            r'\d{1,2}시.*\d{1,2}분',           # 10시 15분
+            r'오전|오후.*\d{1,2}시',            # 오전 10시
+            r'생년월일|생일|태어'                # 생년월일시 관련
+        ]
+        
+        for pattern in birth_patterns:
+            if re.search(pattern, query):
+                return "saju_analysis"
+        
+        # 2. 사주 전문 용어가 포함된 경우 → 사주 지식
+        saju_count = sum(1 for keyword in self.saju_keywords if keyword in query_lower)
+        general_count = sum(1 for keyword in self.general_keywords if keyword in query_lower)
+        
+        # 3. 명확한 일반 질문 키워드 체크
+        clear_general_keywords = ['날씨', '트렌드', '뉴스', '인사', '안녕']
+        clear_general_count = sum(1 for keyword in clear_general_keywords if keyword in query_lower)
+        
+        # 4. 사주 관련 맥락 키워드
+        saju_context_keywords = ['운세', '성격', '미래', '특성', '성향']
+        saju_context_count = sum(1 for keyword in saju_context_keywords if keyword in query_lower)
+        
+        # 분류 로직 개선
+        if clear_general_count >= 1 and saju_count == 0:  # 명확한 일반 질문
+            return "general_web"
+        elif saju_count >= 2:  # 사주 키워드 2개 이상
+            return "saju_knowledge"
+        elif saju_count >= 1 and general_count == 0:  # 사주 키워드 1개 + 일반 키워드 없음
+            return "saju_knowledge"
+        elif saju_context_count >= 1:  # 사주 맥락 키워드 포함
+            return "saju_knowledge"
+        elif general_count >= 2:  # 일반 키워드 2개 이상
+            return "general_web"
+        else:
+            # 애매한 경우 사주 관련으로 분류 (사주 상담 AI이므로)
+            return "saju_knowledge"
+    
+    def search_with_strategy(self, query: str) -> Dict[str, Any]:
+        """최적 검색 전략 실행"""
+        query_type = self.classify_query(query)
+        
+        if query_type == "saju_analysis":
+            # 사주 분석: RAG만 사용 (정확성 우선)
+            rag_result = self.rag_search(query)
+            return {
+                "primary_source": "rag",
+                "rag_result": rag_result,
+                "web_result": None,
+                "strategy": "rag_only",
+                "reason": "사주 분석 질문으로 전문 지식 필요"
+            }
+            
+        elif query_type == "saju_knowledge":
+            # 사주 지식: RAG 우선 → 부족시 웹 검색
+            rag_result = self.rag_search(query)
+            
+            # RAG 결과 품질 평가
+            rag_quality = self._evaluate_rag_quality(rag_result, query)
+            
+            if rag_quality < 0.3:  # RAG 결과가 부족한 경우
+                web_result = self.web_search(query, max_results=3) if self.web_search else "웹 검색 기능 비활성화"
+                return {
+                    "primary_source": "web",
+                    "rag_result": rag_result,
+                    "web_result": web_result,
+                    "strategy": "rag_then_web",
+                    "reason": "RAG 결과 부족으로 웹 검색 보완"
+                }
+            else:
+                return {
+                    "primary_source": "rag",
+                    "rag_result": rag_result,
+                    "web_result": None,
+                    "strategy": "rag_sufficient",
+                    "reason": "RAG 검색 결과 충분"
+                }
+                
+        else:  # general_web
+            # 일반 질문: 웹 검색 우선
+            web_result = self.web_search(query, max_results=3) if self.web_search else "웹 검색 기능 비활성화"
+            return {
+                "primary_source": "web",
+                "rag_result": None,
+                "web_result": web_result,
+                "strategy": "web_only",
+                "reason": "일반적인 질문으로 웹 검색 수행"
+            }
+    
+    def _evaluate_rag_quality(self, rag_result: str, query: str) -> float:
+        """RAG 검색 결과 품질 평가 (0.0 ~ 1.0)"""
+        if not rag_result or "검색 중 오류" in rag_result or "검색 결과 없음" in rag_result:
+            return 0.0
+        
+        # 길이 기반 평가 (더 관대하게)
+        if len(rag_result) < 50:
+            return 0.1
+        elif len(rag_result) < 100:
+            length_score = 0.3
+        else:
+            length_score = 0.5
+        
+        # 키워드 매칭 평가
+        query_words = [word for word in query.lower().split() if len(word) > 1]
+        result_lower = rag_result.lower()
+        
+        match_count = sum(1 for word in query_words if word in result_lower)
+        match_ratio = match_count / len(query_words) if query_words else 0
+        
+        # 사주 전문 용어 포함 평가
+        saju_term_count = sum(1 for term in self.saju_keywords if term in result_lower)
+        saju_score = min(saju_term_count / 3, 1.0)  # 3개 이상이면 만점
+        
+        # 유용한 내용 패턴 체크
+        useful_patterns = [
+            '설명', '의미', '특성', '해석', '분석', '방법',
+            '일간', '오행', '십신', '대운', '명리'
+        ]
+        useful_count = sum(1 for pattern in useful_patterns if pattern in result_lower)
+        useful_score = min(useful_count / 3, 0.3)  # 최대 0.3점
+        
+        # 종합 점수 계산
+        # 길이 40% + 키워드 매칭 30% + 사주 용어 20% + 유용성 10%
+        final_score = (length_score * 0.4) + (match_ratio * 0.3) + (saju_score * 0.2) + (useful_score * 0.1)
+        
+        return min(final_score, 1.0)
 
 class ToolManager:
     """도구 관리자 클래스"""
@@ -206,81 +444,40 @@ class ToolManager:
                 return f"검색 중 오류 발생: {str(e)}"
         
         @tool
-        def analyze_birth_info(birth_info: str) -> str:
-            """생년월일시 정보를 바탕으로 정확한 사주팔자를 계산하고 분석합니다. 생년월일시가 주어졌을 때 사용하세요."""
+        def smart_search_saju(query: str) -> str:
+            """질문 유형을 자동 분석하여 최적의 검색 전략(RAG/웹)을 선택합니다. 모든 사주 관련 질문에 우선적으로 사용하세요."""
             try:
-                # 생년월일시 정보 파싱
-                birth_data = self._parse_birth_info(birth_info)
-                if not birth_data:
-                    return "생년월일시 정보를 정확히 파악할 수 없습니다. 예: 1995년 8월 26일 오전 10시 15분"
+                # 지능형 검색 오케스트레이터 초기화
+                if not hasattr(self, '_orchestrator'):
+                    self._orchestrator = SmartSearchOrchestrator(
+                        rag_search_func=search_saju_knowledge.func,
+                        web_search_func=self.web_searcher.search_duckduckgo if hasattr(self, 'web_searcher') else None
+                    )
                 
-                # 사주 계산기 초기화
-                calculator = SajuCalculator()
+                # 최적 검색 전략 실행
+                result = self._orchestrator.search_with_strategy(query)
                 
-                # 사주팔자 계산
-                saju_chart = calculator.calculate_saju(
-                    year=birth_data['year'],
-                    month=birth_data['month'], 
-                    day=birth_data['day'],
-                    hour=birth_data['hour'],
-                    minute=birth_data['minute'],
-                    is_male=birth_data.get('is_male', True)
-                )
+                # 결과 포맷팅
+                response_parts = []
+                response_parts.append(f"🔍 검색 전략: {result['strategy']}")
+                response_parts.append(f"📝 사유: {result['reason']}")
                 
-                # 분석 결과 포맷팅
-                analysis_result = format_saju_analysis(saju_chart, calculator)
+                if result['primary_source'] == 'rag' and result['rag_result']:
+                    response_parts.append(f"\n📚 RAG 검색 결과:\n{result['rag_result']}")
+                    
+                if result['web_result']:
+                    response_parts.append(f"\n🌐 웹 검색 결과:\n{result['web_result']}")
+                    
+                if result['primary_source'] == 'web' and result['web_result']:
+                    response_parts.append(f"\n🌐 웹 검색 결과:\n{result['web_result']}")
                 
-                # 추가 사주 지식 검색
-                day_master = saju_chart.get_day_master()
-                knowledge_query = f"사주 {day_master} 일간 성격 특성 운세"
-                knowledge = search_saju_knowledge.invoke(knowledge_query)
-                
-                return f"{analysis_result}\n\n=== 추가 사주 해석 ===\n{knowledge}"
+                return "\n".join(response_parts)
                 
             except Exception as e:
-                return f"사주 분석 중 오류 발생: {str(e)}"
-        
-        @tool
-        def get_fortune_reading(topic: str, birth_info: str = "", context_info: str = "") -> str:
-            """특정 주제(직업운, 재물운, 건강운, 애정운 등)에 대한 운세를 사주 기반으로 분석합니다."""
-            try:
-                result_parts = []
-                
-                # 생년월일시가 있으면 사주 기반 분석
-                if birth_info:
-                    birth_data = self._parse_birth_info(birth_info)
-                    if birth_data:
-                        calculator = SajuCalculator()
-                        saju_chart = calculator.calculate_saju(
-                            year=birth_data['year'], month=birth_data['month'], 
-                            day=birth_data['day'], hour=birth_data['hour'],
-                            minute=birth_data['minute'], is_male=birth_data.get('is_male', True)
-                        )
-                        
-                        day_master = saju_chart.get_day_master()
-                        ten_gods = calculator.analyze_ten_gods(saju_chart)
-                        elements = calculator.get_element_strength(saju_chart)
-                        
-                        # 사주 기반 운세 분석
-                        saju_analysis = f"""
-=== 사주 기반 {topic} 분석 ===
-일간: {day_master}
-오행 강약: {elements}
-십신 배치: {ten_gods}
-                        """
-                        result_parts.append(saju_analysis)
-                
-                # 전통 사주 지식 검색
-                query = f"{topic} 운세 분석 {context_info} 사주 오행 십신 {birth_info}"
-                knowledge = search_saju_knowledge.invoke(query)
-                result_parts.append(f"=== 전통 사주 지식 ===\n{knowledge}")
-                
-                return "\n\n".join(result_parts)
-                
-            except Exception as e:
-                return f"운세 분석 중 오류 발생: {str(e)}"
-        
-        return [search_saju_knowledge, analyze_birth_info, get_fortune_reading]
+                # 에러 시 기본 RAG 검색으로 폴백
+                return search_saju_knowledge.func(query)
+
+        return [search_saju_knowledge, smart_search_saju]
     
     def _parse_birth_info(self, birth_info: str) -> Dict:
         """생년월일시 정보 파싱"""
@@ -354,12 +551,10 @@ class ToolManager:
         """웹 검색 기반 도구들 반환"""
         
         @tool
-        def search_web_fortune(query: str) -> str:
-            """현재 운세나 최신 점성술 정보를 웹에서 검색합니다. 실시간 정보나 최신 운세 트렌드가 필요할 때 사용하세요."""
+        def search_web_saju(query: str) -> str:
+            """사주나 명리학 관련 일반 지식을 웹에서 검색합니다. RAG 시스템에 없는 정보나 추가적인 설명이 필요할 때 사용하세요."""
             try:
-                # 한국어 운세 관련 키워드 추가
-                search_query = f"{query} 운세 사주 점성술"
-                results = self.web_searcher.search_duckduckgo(search_query, max_results=3)
+                results = self.web_searcher.search_duckduckgo(query, max_results=5)
                 
                 if not results:
                     return "웹 검색 결과를 찾을 수 없습니다."
@@ -377,76 +572,213 @@ class ToolManager:
             except Exception as e:
                 return f"웹 검색 중 오류 발생: {str(e)}"
         
-        @tool
-        def get_current_horoscope(sign_or_date: str) -> str:
-            """특정 별자리나 날짜의 최신 운세를 웹에서 검색합니다."""
-            try:
-                search_query = f"{sign_or_date} 오늘 운세 별자리 horoscope"
-                results = self.web_searcher.search_duckduckgo(search_query, max_results=3)
-                
-                if not results:
-                    return "운세 정보를 찾을 수 없습니다."
-                
-                formatted_results = []
-                for i, result in enumerate(results, 1):
-                    formatted_results.append(
-                        f"{i}. {result['title']}\n"
-                        f"   {result['snippet']}\n"
-                        f"   출처: {result['url']}"
-                    )
-                
-                return f"{sign_or_date} 운세 검색 결과:\n\n" + "\n\n".join(formatted_results)
-                
-            except Exception as e:
-                return f"운세 검색 중 오류 발생: {str(e)}"
-        
-        @tool
-        def search_fortune_trends(topic: str) -> str:
-            """운세나 사주 관련 최신 트렌드와 정보를 검색합니다."""
-            try:
-                search_query = f"{topic} 2025 트렌드 사주 운세 점성술"
-                results = self.web_searcher.search_duckduckgo(search_query, max_results=3)
-                
-                if not results:
-                    return "관련 트렌드 정보를 찾을 수 없습니다."
-                
-                formatted_results = []
-                for i, result in enumerate(results, 1):
-                    formatted_results.append(
-                        f"{i}. {result['title']}\n"
-                        f"   {result['snippet']}\n"
-                        f"   출처: {result['url']}"
-                    )
-                
-                return f"{topic} 관련 최신 트렌드:\n\n" + "\n\n".join(formatted_results)
-                
-            except Exception as e:
-                return f"트렌드 검색 중 오류 발생: {str(e)}"
-        
-        return [search_web_fortune, get_current_horoscope, search_fortune_trends]
+        return [search_web_saju]
     
     def _get_calendar_tools(self) -> List[Tool]:
-        """만세력 기반 도구들 반환"""
+        """사주 계산 도구들 반환"""
         
         @tool
-        def calculate_saju_pillars(birth_year: int, birth_month: int, birth_day: int, birth_hour: int, is_lunar: bool = False) -> str:
-            """생년월일시를 바탕으로 정확한 사주팔자를 계산합니다."""
-            # TODO: 실제 만세력 API 연동
-            return f"사주팔자 계산 결과 (미구현): {birth_year}년 {birth_month}월 {birth_day}일 {birth_hour}시"
+        def parse_birth_info(birth_info: str) -> str:
+            """생년월일시 정보를 파싱하여 구조화된 데이터로 변환합니다. 예: '1995년 8월 26일 오전 10시 15분'"""
+            try:
+                birth_data = self._parse_birth_info(birth_info)
+                if not birth_data:
+                    return "생년월일시 정보를 정확히 파악할 수 없습니다. 예: 1995년 8월 26일 오전 10시 15분"
+                
+                return f"""파싱된 생년월일시 정보:
+- 년도: {birth_data['year']}년
+- 월: {birth_data['month']}월  
+- 일: {birth_data['day']}일
+- 시간: {birth_data['hour']}시 {birth_data['minute']}분
+- 성별: {'남성' if birth_data['is_male'] else '여성'}"""
+                
+            except Exception as e:
+                return f"생년월일시 파싱 중 오류 발생: {str(e)}"
         
         @tool
-        def get_lunar_calendar(solar_date: str) -> str:
-            """양력 날짜를 음력으로 변환합니다."""
-            # TODO: 음력 변환 API 연동
-            return f"음력 변환 결과 (미구현): {solar_date}"
+        def calculate_saju_chart(birth_info: str) -> str:
+            """생년월일시를 바탕으로 정확한 사주팔자를 계산합니다. 사주 기본 구조만 계산하고 해석은 별도 도구를 사용하세요."""
+            try:
+                # 생년월일시 정보 파싱
+                birth_data = self._parse_birth_info(birth_info)
+                if not birth_data:
+                    return "생년월일시 정보를 정확히 파악할 수 없습니다. 예: 1995년 8월 26일 오전 10시 15분"
+                
+                # 사주 계산기 초기화
+                calculator = SajuCalculator()
+                
+                # 사주팔자 계산
+                saju_chart = calculator.calculate_saju(
+                    year=birth_data['year'],
+                    month=birth_data['month'], 
+                    day=birth_data['day'],
+                    hour=birth_data['hour'],
+                    minute=birth_data['minute'],
+                    is_male=birth_data.get('is_male', True)
+                )
+                
+                # 기본 사주팔자만 반환 (해석 제외)
+                result = []
+                result.append("=== 사주팔자 계산 결과 ===")
+                result.append(f"년주(年柱): {saju_chart.year_pillar}")
+                result.append(f"월주(月柱): {saju_chart.month_pillar}")
+                result.append(f"일주(日柱): {saju_chart.day_pillar}")
+                result.append(f"시주(時柱): {saju_chart.hour_pillar}")
+                result.append(f"일간(日干): {saju_chart.get_day_master()}")
+                
+                return "\n".join(result)
+                
+            except Exception as e:
+                return f"사주 계산 중 오류 발생: {str(e)}"
         
         @tool
-        def calculate_compatibility(person1_birth: str, person2_birth: str) -> str:
-            """두 사람의 사주팔자 궁합을 계산합니다."""
-            # TODO: 궁합 계산 로직 구현
-            return f"궁합 계산 결과 (미구현): {person1_birth} vs {person2_birth}"
+        def analyze_five_elements(birth_info: str) -> str:
+            """사주팔자의 오행 강약을 분석합니다. 먼저 calculate_saju_chart로 사주를 계산한 후 사용하세요."""
+            try:
+                # 생년월일시 정보 파싱
+                birth_data = self._parse_birth_info(birth_info)
+                if not birth_data:
+                    return "생년월일시 정보를 정확히 파악할 수 없습니다."
+                
+                # 사주 계산
+                calculator = SajuCalculator()
+                saju_chart = calculator.calculate_saju(
+                    year=birth_data['year'],
+                    month=birth_data['month'], 
+                    day=birth_data['day'],
+                    hour=birth_data['hour'],
+                    minute=birth_data['minute'],
+                    is_male=birth_data.get('is_male', True)
+                )
+                
+                # 오행 분석 (현대 정밀 방식)
+                elements = calculator.get_element_strength(saju_chart)
+                elements_balanced = calculator.get_element_strength_balanced(saju_chart)
+                elements_simple = calculator.get_element_strength_simple(saju_chart)
+                
+                result = []
+                result.append("=== 오행 강약 분석 (정밀 분석) ===")
+                for element, strength in elements.items():
+                    result.append(f"{element}: {strength}점")
+                
+                result.append("\n=== 오행 강약 분석 (8점 절충 방식) ===")
+                for element, strength in elements_balanced.items():
+                    result.append(f"{element}: {strength}점")
+                
+                result.append("\n=== 오행 강약 분석 (전통 8점 방식) ===")
+                for element, strength in elements_simple.items():
+                    result.append(f"{element}: {strength}점")
+                
+                # 오행 균형 평가 (정밀 분석 기준)
+                max_element = max(elements, key=elements.get)
+                min_element = min(elements, key=elements.get)
+                result.append(f"\n가장 강한 오행: {max_element} ({elements[max_element]}점)")
+                result.append(f"가장 약한 오행: {min_element} ({elements[min_element]}점)")
+                
+                return "\n".join(result)
+                
+            except Exception as e:
+                return f"오행 분석 중 오류 발생: {str(e)}"
         
-        return [calculate_saju_pillars, get_lunar_calendar, calculate_compatibility]
+        @tool
+        def analyze_ten_gods(birth_info: str) -> str:
+            """사주팔자의 십신을 분석합니다. 먼저 calculate_saju_chart로 사주를 계산한 후 사용하세요."""
+            try:
+                # 생년월일시 정보 파싱
+                birth_data = self._parse_birth_info(birth_info)
+                if not birth_data:
+                    return "생년월일시 정보를 정확히 파악할 수 없습니다."
+                
+                # 사주 계산
+                calculator = SajuCalculator()
+                saju_chart = calculator.calculate_saju(
+                    year=birth_data['year'],
+                    month=birth_data['month'], 
+                    day=birth_data['day'],
+                    hour=birth_data['hour'],
+                    minute=birth_data['minute'],
+                    is_male=birth_data.get('is_male', True)
+                )
+                
+                # 십신 분석
+                ten_gods = calculator.analyze_ten_gods(saju_chart)
+                
+                result = []
+                result.append("=== 십신 분석 ===")
+                for pillar_name, gods in ten_gods.items():
+                    if gods:
+                        result.append(f"{pillar_name}: {', '.join(gods)}")
+                
+                return "\n".join(result)
+                
+            except Exception as e:
+                return f"십신 분석 중 오류 발생: {str(e)}"
+        
+        @tool
+        def calculate_great_fortune(birth_info: str) -> str:
+            """대운을 계산합니다. 먼저 calculate_saju_chart로 사주를 계산한 후 사용하세요."""
+            try:
+                # 생년월일시 정보 파싱
+                birth_data = self._parse_birth_info(birth_info)
+                if not birth_data:
+                    return "생년월일시 정보를 정확히 파악할 수 없습니다."
+                
+                # 사주 계산
+                calculator = SajuCalculator()
+                saju_chart = calculator.calculate_saju(
+                    year=birth_data['year'],
+                    month=birth_data['month'], 
+                    day=birth_data['day'],
+                    hour=birth_data['hour'],
+                    minute=birth_data['minute'],
+                    is_male=birth_data.get('is_male', True)
+                )
+                
+                # 대운 계산
+                great_fortunes = calculator.calculate_great_fortune_improved(saju_chart)
+                
+                result = []
+                result.append("=== 대운 계산 ===")
+                for gf in great_fortunes:
+                    result.append(f"{gf['age']}세: {gf['pillar']} ({gf['years']}) - {gf['direction']}")
+                
+                return "\n".join(result)
+                
+            except Exception as e:
+                return f"대운 계산 중 오류 발생: {str(e)}"
+        
+        @tool
+        def get_comprehensive_saju_analysis(birth_info: str) -> str:
+            """생년월일시를 바탕으로 종합적인 사주 분석을 수행합니다. 성별 정보도 자동으로 파싱하여 대운 계산에 반영합니다. 예: '1995년 8월 26일 오전 10시 15분 남성'"""
+            try:
+                # 생년월일시 정보 파싱
+                birth_data = self._parse_birth_info(birth_info)
+                if not birth_data:
+                    return "생년월일시 정보를 정확히 파악할 수 없습니다. 예: 1995년 8월 26일 오전 10시 15분"
+                
+                # 사주 계산기 초기화
+                calculator = SajuCalculator()
+                
+                # 사주팔자 계산
+                saju_chart = calculator.calculate_saju(
+                    year=birth_data['year'],
+                    month=birth_data['month'], 
+                    day=birth_data['day'],
+                    hour=birth_data['hour'],
+                    minute=birth_data['minute'],
+                    is_male=birth_data.get('is_male', True)
+                )
+                
+                # 종합 분석 결과 포맷팅
+                analysis_result = format_saju_analysis(saju_chart, calculator)
+                
+                return analysis_result
+                
+            except Exception as e:
+                return f"종합 사주 분석 중 오류 발생: {str(e)}"
+        
+        return [parse_birth_info, calculate_saju_chart, analyze_five_elements, 
+                analyze_ten_gods, calculate_great_fortune, get_comprehensive_saju_analysis]
     
     def get_tools(self) -> List[Tool]:
         """모든 활성화된 도구들 반환"""
