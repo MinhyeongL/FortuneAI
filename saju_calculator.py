@@ -292,7 +292,8 @@ class SajuCalculator:
         year_pillar = self._calculate_year_pillar(year)
         month_pillar = self._calculate_month_pillar_improved(year, month, day, is_leap_month)
         day_pillar = self._calculate_day_pillar(days_diff)
-        hour_pillar = self._calculate_hour_pillar_improved(day_pillar.heavenly_stem, hour, minute)
+        # 태양시 보정된 시간으로 시주 계산
+        hour_pillar = self._calculate_hour_pillar_improved(day_pillar.heavenly_stem, birth_datetime.hour, birth_datetime.minute)
         
         birth_info = {
             "year": year, "month": month, "day": day, 
@@ -874,7 +875,7 @@ class SajuCalculator:
         # 주요 도시별 태양시 보정값 (분 단위) - 정밀 검증 완료
         # 계산 공식: (표준시 기준 경도 - 실제 경도) × 4분
         solar_corrections = {
-            "Asia/Seoul": 32.1,      # 서울: +32분 05초 (135° - 126.98° = 8.02° × 4분) ✓
+            "Asia/Seoul": 32.0,      # 서울: +32분 05초 (135° - 126.98° = 8.02° × 4분) ✓
             "Asia/Tokyo": -18.8,     # 도쿄: -19분 (135° - 139.7° = -4.7° × 4분) 수정됨
             "Asia/Shanghai": -5.9,   # 상하이: -6분 (120° - 121.47° = -1.47° × 4분) 수정됨
             "Asia/Hong_Kong": 22.1,  # 홍콩: +22분 (120° - 114.17° = 5.83° × 4분) ✓
