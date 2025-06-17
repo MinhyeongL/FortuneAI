@@ -618,6 +618,8 @@ class ResponseGenerator:
             return self._generate_saju_response(user_query, saju_result, rag_result)
         elif question_type == "fortune_consultation":
             return self._generate_fortune_response(user_query, saju_result, rag_result, web_result)
+        elif question_type == "simple_question":
+            return self._generate_simple_response(user_query, state)
         elif question_type == "general_search":
             return self._generate_general_response(user_query, web_result, rag_result)
         else:
@@ -716,6 +718,49 @@ class ResponseGenerator:
         response_parts.append(advice)
         
         return "\n".join(response_parts)
+    
+    def _generate_simple_response(self, user_query: str, state: SupervisorState) -> str:
+        """간단한 질문에 대한 직접 응답 생성"""
+        from datetime import datetime
+        
+        current_date = datetime.now()
+        
+        # 날짜 관련 질문 처리
+        if any(keyword in user_query.lower() for keyword in ["오늘", "날짜", "몇월", "며칠", "요일"]):
+            current_date_str = current_date.strftime("%Y년 %m월 %d일 %A")
+            korean_weekday = {
+                'Monday': '월요일',
+                'Tuesday': '화요일', 
+                'Wednesday': '수요일',
+                'Thursday': '목요일',
+                'Friday': '금요일',
+                'Saturday': '토요일',
+                'Sunday': '일요일'
+            }
+            weekday = korean_weekday.get(current_date.strftime('%A'), current_date.strftime('%A'))
+            
+            return f"""📅 **현재 날짜 정보**
+
+오늘은 {current_date.year}년 {current_date.month}월 {current_date.day}일 {weekday}입니다.
+
+혹시 사주나 운세와 관련된 질문이 있으시면 언제든 말씀해 주세요! 🔮"""
+        
+        # 시간 관련 질문 처리
+        elif any(keyword in user_query.lower() for keyword in ["시간", "몇시", "지금"]):
+            current_time_str = current_date.strftime("%H시 %M분")
+            return f"""⏰ **현재 시간 정보**
+
+지금은 {current_time_str}입니다.
+
+사주 계산이나 운세 상담이 필요하시면 생년월일시를 알려주세요! 🔮"""
+        
+        # 기타 간단한 질문
+        else:
+            return f"""💭 **간단한 답변**
+
+질문해 주신 내용에 대해 간단히 답변드리겠습니다.
+
+더 자세한 사주나 운세 상담이 필요하시면 구체적인 질문을 해주세요! 🔮"""
     
     def _generate_general_response(self, user_query: str, web_result: Optional[Dict], 
                                  rag_result: Optional[Dict]) -> str:

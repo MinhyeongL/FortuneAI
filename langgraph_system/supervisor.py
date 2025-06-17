@@ -71,13 +71,21 @@ class SupervisorNode:
         """사용자 의도 분석 및 생년월일시 추출"""
         user_query = state["user_query"]
         
+        # 현재 날짜 정보
+        current_date = datetime.now()
+        current_date_str = current_date.strftime("%Y년 %m월 %d일 %A")
+        
         # 통합 분석 프롬프트
-        system_prompt = """당신은 사주/운세 상담 시스템의 분석 전문가입니다.
+        system_prompt = f"""당신은 사주/운세 상담 시스템의 분석 전문가입니다.
+
+**현재 날짜: {current_date_str}**
+
 사용자 질문을 분석하여 다음을 수행해주세요:
 
 1. 질문 유형 분류:
    - saju_calculation: 사주팔자 계산 요청
    - fortune_consultation: 운세 상담/해석 요청  
+   - simple_question: 간단한 질문 (날짜, 시간 등 직접 답변 가능)
    - general_search: 일반 정보 검색
 
 2. 생년월일시 정보 추출 (있는 경우):
@@ -85,19 +93,19 @@ class SupervisorNode:
    - 성별 (남성/여성)
 
 응답 형식 (JSON):
-{
+{{
     "question_type": "분류 결과",
     "confidence": 0.0-1.0,
-    "birth_info": {
+    "birth_info": {{
         "year": 1995,
         "month": 8, 
         "day": 26,
         "hour": 10,
         "minute": 15,
         "is_male": true
-    } 또는 null,
+    }} 또는 null,
     "complexity": "simple/medium/complex"
-}"""
+}}"""
 
         try:
             # LLM 통합 분석
@@ -151,6 +159,10 @@ class SupervisorNode:
             # 생년월일시가 있으면 사주도 계산
             if state.get("birth_info"):
                 assigned_workers.insert(0, "saju")
+        
+        elif question_type == "simple_question":
+            # 간단한 질문은 워커 없이 바로 응답 생성
+            assigned_workers = []
         
         elif question_type == "general_search":
             assigned_workers.append("web")
@@ -236,7 +248,10 @@ class SupervisorNode:
     def _fallback_analysis(self, state: SupervisorState, user_query: str) -> SupervisorState:
         """LLM 실패시 백업 분석"""
         # 간단한 키워드 기반 분석
-        if any(keyword in user_query for keyword in ["사주", "팔자", "봐주세요"]):
+        if any(keyword in user_query for keyword in ["오늘", "날짜", "몇월", "며칠", "요일", "시간", "몇시"]):
+            question_type = "simple_question"
+            confidence = 0.9
+        elif any(keyword in user_query for keyword in ["사주", "팔자", "봐주세요"]):
             question_type = "saju_calculation"
             confidence = 0.7
         elif any(keyword in user_query for keyword in ["운세", "운", "궁합"]):

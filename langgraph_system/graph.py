@@ -83,6 +83,10 @@ def create_fortune_graph() -> StateGraph:
     # Supervisor에서 조건부 라우팅 - 통합된 라우팅 함수 사용
     def supervisor_router(state: SupervisorState) -> Literal["saju_worker", "rag_worker", "web_worker", "response_generator"]:
         """Supervisor 통합 라우터"""
+        # 간단한 질문인 경우 바로 응답 생성
+        if state.get("question_type") == "simple_question":
+            return "response_generator"
+        
         # 먼저 작업 완료 여부 확인
         assigned_workers = set(state.get("assigned_workers", []))
         completed_workers = set(state.get("completed_workers", []))
