@@ -27,7 +27,7 @@ FortuneAI는 LangChain과 RAG(Retrieval-Augmented Generation) 기술을 활용�
 - **임베딩 모델**: BAAI/bge-m3 (다국어 지원)
 - **검색 시스템**: EnsembleRetriever (시맨틱 80% + BM25 20%)
 - **리랭커**: FlashRank 기반 검색 결과 재정렬
-- **LLM**: OpenAI GPT-4o-mini / Google Gemini-2.0-flash
+- **LLM**: OpenAI GPT-4.1-mini / Google Gemini-2.0-flash
 
 ## 📋 요구사항
 

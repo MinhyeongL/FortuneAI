@@ -29,7 +29,7 @@ def create_saju_agent():
         ("system", "당신은 사주 전문가입니다. 생년월일시를 받아 사주팔자를 계산하세요."),
         MessagesPlaceholder(variable_name="messages")
     ])
-    llm = ChatOpenAI(model="gpt-4o-mini", temperature=0)
+    llm = ChatOpenAI(model="gpt-4.1-mini", temperature=0)
     return prompt | llm
 
 def create_rag_agent():
@@ -38,7 +38,7 @@ def create_rag_agent():
         ("system", "당신은 사주 해석 전문가입니다. 사주 관련 지식을 검색하고 해석하세요."),
         MessagesPlaceholder(variable_name="messages")
     ])
-    llm = ChatOpenAI(model="gpt-4o-mini", temperature=0)
+    llm = ChatOpenAI(model="gpt-4.1-mini", temperature=0)
     return prompt | llm
 
 def create_web_agent():
@@ -47,7 +47,7 @@ def create_web_agent():
         ("system", "당신은 웹 검색 전문가입니다. 최신 정보를 검색하세요."),
         MessagesPlaceholder(variable_name="messages")
     ])
-    llm = ChatOpenAI(model="gpt-4o-mini", temperature=0)
+    llm = ChatOpenAI(model="gpt-4.1-mini", temperature=0)
     return prompt | llm
 
 # 에이전트 인스턴스 생성
