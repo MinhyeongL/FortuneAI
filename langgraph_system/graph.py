@@ -9,6 +9,18 @@ from langchain_core.messages import HumanMessage
 from .state import SupervisorState
 from .nodes import NodeManager
 
+# 전역 NodeManager 인스턴스 (한 번만 초기화)
+_node_manager = None
+
+def get_node_manager():
+    """NodeManager 싱글톤 반환"""
+    global _node_manager
+    if _node_manager is None:
+        print("🔧 NodeManager 초기화 중...")
+        _node_manager = NodeManager()
+        print("✅ NodeManager 초기화 완료!")
+    return _node_manager
+
 def route_supervisor(state: SupervisorState) -> str:
     """Supervisor 결과에 따라 다음 노드 결정"""
     # Supervisor가 반환한 응답에서 다음 에이전트 추출
@@ -29,8 +41,8 @@ def route_supervisor(state: SupervisorState) -> str:
 
 def create_graph():
     """NodeManager 기반 그래프 생성"""
-    # NodeManager 인스턴스 생성
-    node_manager = NodeManager()
+    # 싱글톤 NodeManager 사용
+    node_manager = get_node_manager()
     
     # 모든 노드 생성
     supervisor_node = node_manager.create_supervisor_node()
@@ -72,7 +84,7 @@ def create_graph():
     # 응답 생성 후 종료
     workflow.add_edge("response_generator", END)
     
-    return workflow
+    return workflow.compile()
 
 def run_query(query: str) -> str:
     """간단한 실행 함수"""

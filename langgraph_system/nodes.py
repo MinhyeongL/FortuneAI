@@ -19,7 +19,7 @@ class NodeManager:
         # 도구 관리자 초기화
         self.tool_manager = ToolManager(
             enable_rag=True,
-            enable_web=False, 
+            enable_web=True, 
             enable_calendar=True
         )
         # 에이전트 관리자 초기화
