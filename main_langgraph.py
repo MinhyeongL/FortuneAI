@@ -11,7 +11,7 @@ from datetime import datetime
 # 현재 디렉토리를 Python 경로에 추가
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
-from langgraph_system.graph import run_fortune_query, run_fortune_query_debug, run_fortune_query_verbose
+from langgraph_system.graph import run_query
 
 def print_banner():
     """시스템 배너 출력"""
@@ -67,27 +67,18 @@ def handle_debug_query(query: str) -> str:
     print("-" * 50)
     
     start_time = time.time()
-    debug_result = run_fortune_query_debug(actual_query, verbose=False)  # 간단한 디버그
+    response = run_query(actual_query)  # 기본 함수 사용
     execution_time = time.time() - start_time
     
-    if debug_result["success"]:
-        debug_info = f"""
+    debug_info = f"""
 🔍 **디버그 정보**
 • 실행 시간: {execution_time:.2f}초
-• 총 단계: {debug_result['execution_summary']['total_steps']}
-• 실행 경로: {' → '.join(debug_result['execution_summary']['execution_path'])}
-• 사용된 워커: {', '.join(debug_result['execution_summary']['workers_used'])}
-• 질문 유형: {debug_result['execution_summary']['question_type']}
+• 질문: {actual_query}
 
-📋 **최종 응답**
-{debug_result['final_response']}
-
-🔧 **상세 실행 로그**
-총 {len(debug_result['all_states'])}개 상태 변화 기록됨
+📋 **응답**
+{response}
 """
-        return debug_info
-    else:
-        return f"❌ 디버그 실행 실패: {debug_result['error']}"
+    return debug_info
 
 def handle_verbose_query(query: str) -> str:
     """상세 모드 쿼리 처리"""
@@ -102,7 +93,7 @@ def handle_verbose_query(query: str) -> str:
     print("=" * 60)
     
     start_time = time.time()
-    response = run_fortune_query_verbose(actual_query)
+    response = run_query(actual_query)  # 기본 함수 사용
     execution_time = time.time() - start_time
     
     print(f"\n⏱️  총 실행 시간: {execution_time:.2f}초")
@@ -151,7 +142,7 @@ def main():
             
             # 일반 쿼리 실행
             start_time = time.time()
-            response = run_fortune_query(user_input, thread_id=session_id)
+            response = run_query(user_input)
             execution_time = time.time() - start_time
             
             # 응답 출력
@@ -186,7 +177,7 @@ def test_system():
         print("-" * 50)
         
         start_time = time.time()
-        response = run_fortune_query(query, thread_id=f"test_{i}")
+        response = run_query(query)
         execution_time = time.time() - start_time
         
         print(f"✅ 응답 생성 완료 ({execution_time:.2f}초)")
@@ -211,7 +202,7 @@ if __name__ == "__main__":
         else:
             # 직접 쿼리 실행
             query = " ".join(sys.argv[1:])
-            response = run_fortune_query(query)
+            response = run_query(query)
             print(format_response(response))
     else:
         # 대화형 모드
