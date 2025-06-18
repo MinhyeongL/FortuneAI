@@ -3,7 +3,8 @@
 """
 
 from .state import SupervisorState
-from .nodes import supervisor, saju_worker, rag_worker, web_worker, response_generator
+from .agents import AgentManager
+from .nodes import NodeManager
 from .graph import create_graph, run_query
 
 __version__ = "1.0.0"
@@ -11,12 +12,9 @@ __all__ = [
     # 상태 관리
     "SupervisorState",
     
-    # 노드들
-    "supervisor",
-    "saju_worker",
-    "rag_worker", 
-    "web_worker",
-    "response_generator",
+    # 관리자 클래스들
+    "AgentManager",
+    "NodeManager",
     
     # 그래프 관련
     "create_graph",

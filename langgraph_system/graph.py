@@ -1,5 +1,5 @@
 """
-간단한 메시지 기반 LangGraph
+NodeManager 기반 LangGraph
 """
 
 from typing import Literal
@@ -7,7 +7,7 @@ from langgraph.graph import StateGraph, END
 from langchain_core.messages import HumanMessage
 
 from .state import SupervisorState
-from .nodes import supervisor, saju_worker, rag_worker, web_worker, response_generator
+from .nodes import NodeManager
 
 def route_supervisor(state: SupervisorState) -> str:
     """Supervisor 결과에 따라 다음 노드 결정"""
@@ -28,11 +28,22 @@ def route_supervisor(state: SupervisorState) -> str:
     return "response_generator"
 
 def create_graph():
-    """간단한 메시지 기반 그래프 생성"""
+    """NodeManager 기반 그래프 생성"""
+    # NodeManager 인스턴스 생성
+    node_manager = NodeManager()
+    
+    # 모든 노드 생성
+    supervisor_node = node_manager.create_supervisor_node()
+    saju_worker = node_manager.create_saju_node()
+    rag_worker = node_manager.create_rag_node()
+    web_worker = node_manager.create_web_node()
+    response_generator = node_manager.create_response_generator_node()
+    
+    # 그래프 생성
     workflow = StateGraph(SupervisorState)
     
     # 노드 추가
-    workflow.add_node("supervisor", supervisor)
+    workflow.add_node("supervisor", supervisor_node)
     workflow.add_node("saju_worker", saju_worker)
     workflow.add_node("rag_worker", rag_worker)
     workflow.add_node("web_worker", web_worker)
@@ -61,7 +72,7 @@ def create_graph():
     # 응답 생성 후 종료
     workflow.add_edge("response_generator", END)
     
-    return workflow.compile()
+    return workflow
 
 def run_query(query: str) -> str:
     """간단한 실행 함수"""
