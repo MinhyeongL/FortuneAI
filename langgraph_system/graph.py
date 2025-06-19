@@ -1,104 +1,64 @@
 """
-NodeManager 기반 LangGraph
+LangGraph 워크플로 그래프 생성
 """
 
-from typing import Literal
 from langgraph.graph import StateGraph, END
-from langchain_core.messages import HumanMessage
-
 from .state import SajuState
-from .nodes import NodeManager
+from .nodes import get_node_manager
 
-# 전역 NodeManager 인스턴스 (한 번만 초기화)
-_node_manager = None
-
-def get_node_manager():
-    """NodeManager 싱글톤 반환"""
-    global _node_manager
-    if _node_manager is None:
-        print("🔧 NodeManager 초기화 중...")
-        _node_manager = NodeManager()
-        print("✅ NodeManager 초기화 완료!")
-    return _node_manager
-
-def route_supervisor(state: SajuState) -> str:
-    """Supervisor 결과에 따라 다음 노드 결정"""
-    # Supervisor가 반환한 응답에서 다음 에이전트 추출
-    messages = state["messages"]
-    if messages:
-        last_message = messages[-1].content
-        
-        if "SajuAgent" in last_message:
-            return "saju_worker"
-        elif "RagAgent" in last_message:
-            return "rag_worker"
-        elif "WebAgent" in last_message:
-            return "web_worker"
-        elif "FINISH" in last_message:
-            return "result_generator"
+def create_workflow():
+    """워크플로 그래프 생성 및 반환"""
     
-    return "result_generator"
-
-def create_graph():
-    """NodeManager 기반 그래프 생성"""
-    # 싱글톤 NodeManager 사용
+    # 싱글톤 NodeManager 인스턴스 가져오기
     node_manager = get_node_manager()
     
-    # 모든 노드 생성
-    supervisor_node = node_manager.create_supervisor_node()
-    saju_worker = node_manager.create_saju_node()
-    rag_worker = node_manager.create_rag_node()
-    web_worker = node_manager.create_web_node()
-    response_generator = node_manager.create_response_generator_node()
-    
-    # 그래프 생성
+    # StateGraph 생성
     workflow = StateGraph(SajuState)
     
     # 노드 추가
-    workflow.add_node("supervisor", supervisor_node)
-    workflow.add_node("saju_worker", saju_worker)
-    workflow.add_node("rag_worker", rag_worker)
-    workflow.add_node("web_worker", web_worker)
-    workflow.add_node("response_generator", response_generator)
+    workflow.add_node("supervisor", node_manager.create_supervisor_node())
+    workflow.add_node("SajuAgent", node_manager.create_saju_node())
+    workflow.add_node("RagAgent", node_manager.create_rag_node())
+    workflow.add_node("WebAgent", node_manager.create_web_node())
+    workflow.add_node("result_generator", node_manager.create_result_generator_node())
     
-    # 시작점
+    # 라우팅 조건부 함수 정의
+    def should_continue(state):
+        # supervisor의 next 결정에 따라 라우팅
+        next_agent = state.get("next")
+        
+        if next_agent == "FINISH":
+            return "result_generator"
+        elif next_agent in ["SajuAgent", "RagAgent", "WebAgent"]:
+            return next_agent
+        else:
+            # 기본값: 결과 생성으로
+            return "result_generator"
+    
+    # 엣지 설정
     workflow.set_entry_point("supervisor")
     
-    # Supervisor에서 조건부 라우팅
+    # supervisor에서 조건부 라우팅
     workflow.add_conditional_edges(
         "supervisor",
-        route_supervisor,
+        should_continue,
         {
-            "saju_worker": "saju_worker",
-            "rag_worker": "rag_worker",
-            "web_worker": "web_worker",
-            "response_generator": "response_generator"
+            "SajuAgent": "SajuAgent",
+            "RagAgent": "RagAgent", 
+            "WebAgent": "WebAgent",
+            "result_generator": "result_generator"
         }
     )
     
-    # 모든 워커는 다시 supervisor로
-    workflow.add_edge("saju_worker", "supervisor")
-    workflow.add_edge("rag_worker", "supervisor")
-    workflow.add_edge("web_worker", "supervisor")
+    # 각 에이전트에서 supervisor로 돌아가기
+    workflow.add_edge("SajuAgent", "supervisor")
+    workflow.add_edge("RagAgent", "supervisor")  
+    workflow.add_edge("WebAgent", "supervisor")
     
-    # 응답 생성 후 종료
-    workflow.add_edge("response_generator", END)
+    # 결과 생성 후 종료
+    workflow.add_edge("result_generator", END)
     
-    return workflow.compile()
-
-def run_query(query: str) -> str:
-    """간단한 실행 함수"""
-    app = create_graph()
+    # 워크플로 컴파일
+    app = workflow.compile()
     
-    initial_state = {
-        "messages": [HumanMessage(content=query)],
-        "next": None,
-        "final_response": None,
-        "response_generated": False
-    }
-    
-    try:
-        result = app.invoke(initial_state)
-        return result.get("final_response", "응답 생성 실패")
-    except Exception as e:
-        return f"오류 발생: {str(e)}" 
+    return app 

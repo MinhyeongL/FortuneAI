@@ -11,7 +11,8 @@ from datetime import datetime
 # 현재 디렉토리를 Python 경로에 추가
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
-from langgraph_system.graph import run_query
+from langchain_core.messages import HumanMessage
+from langgraph_system.graph import create_workflow
 
 def print_banner():
     """시스템 배너 출력"""
@@ -54,7 +55,7 @@ def format_response(response: str) -> str:
     
     return formatted
 
-def handle_debug_query(query: str) -> str:
+def handle_debug_query(query: str, app) -> str:
     """디버그 쿼리 처리"""
     if not query.startswith("debug:"):
         return None
@@ -67,7 +68,7 @@ def handle_debug_query(query: str) -> str:
     print("-" * 50)
     
     start_time = time.time()
-    response = run_query(actual_query)  # 기본 함수 사용
+    response = run_query_with_app(actual_query, app)  # 미리 생성된 워크플로 사용
     execution_time = time.time() - start_time
     
     debug_info = f"""
@@ -80,7 +81,7 @@ def handle_debug_query(query: str) -> str:
 """
     return debug_info
 
-def handle_verbose_query(query: str) -> str:
+def handle_verbose_query(query: str, app) -> str:
     """상세 모드 쿼리 처리"""
     if not query.startswith("verbose:"):
         return None
@@ -93,16 +94,57 @@ def handle_verbose_query(query: str) -> str:
     print("=" * 60)
     
     start_time = time.time()
-    response = run_query(actual_query)  # 기본 함수 사용
+    response = run_query_with_app(actual_query, app)  # 미리 생성된 워크플로 사용
     execution_time = time.time() - start_time
     
     print(f"\n⏱️  총 실행 시간: {execution_time:.2f}초")
     return response
 
+
+
+def run_query_with_app(query: str, app) -> str:
+    """LangGraph 시스템으로 쿼리 실행 - 미리 생성된 워크플로 사용"""
+    print(f"🔍 쿼리 실행: {query}")
+    
+    # 초기 상태 설정
+    initial_state = {
+        "messages": [HumanMessage(content=query)],
+        "next": None,
+        "final_response": None,
+        "sender": None
+    }
+    
+    try:
+        print("🚀 워크플로 실행 중...")
+        result = app.invoke(initial_state)
+        
+        final_response = result.get("final_response")
+        if final_response:
+            print("✅ 실행 완료!")
+            return final_response
+        else:
+            print("❌ 응답 생성 실패")
+            return "응답을 생성하지 못했습니다."
+            
+    except Exception as e:
+        print(f"❌ 오류 발생: {str(e)}")
+        return f"오류가 발생했습니다: {str(e)}"
+
 def main():
     """메인 실행 함수"""
     print_banner()
     print_system_info()
+    
+    # ✨ 시스템 시작 시 NodeManager 미리 초기화
+    print("🔧 시스템 초기화 중...")
+    from langgraph_system.nodes import get_node_manager
+    get_node_manager()  # 싱글톤 초기화 (6-10초 소요)
+    print("✅ 시스템 초기화 완료!")
+    
+    # ✨ 워크플로도 미리 생성
+    print("⚙️ 워크플로 생성 중...")
+    app = create_workflow()
+    print("✅ 워크플로 준비 완료!")
     
     session_id = f"session_{int(time.time())}"
     query_count = 0
@@ -130,19 +172,19 @@ def main():
             
             # 디버그 모드 처리
             if user_input.startswith("debug:"):
-                response = handle_debug_query(user_input)
+                response = handle_debug_query(user_input, app)
                 print(response)
                 continue
             
             # 상세 모드 처리
             if user_input.startswith("verbose:"):
-                response = handle_verbose_query(user_input)
+                response = handle_verbose_query(user_input, app)
                 print(f"\n📝 **최종 응답**\n{format_response(response)}")
                 continue
             
-            # 일반 쿼리 실행
+            # 일반 쿼리 실행 - 미리 생성된 워크플로 사용
             start_time = time.time()
-            response = run_query(user_input)
+            response = run_query_with_app(user_input, app)  # 새로운 함수 사용
             execution_time = time.time() - start_time
             
             # 응답 출력
@@ -162,39 +204,19 @@ def main():
             print("🔧 시스템을 다시 시도해보세요.")
             continue
 
-def test_system():
-    """시스템 테스트 함수"""
-    print("🧪 시스템 테스트 시작...")
-    
-    test_queries = [
-        "1995년 8월 26일 오전 10시 15분 남자 사주 봐주세요",
-        "사주에서 십신이란 무엇인가요?",
-        "2024년 갑진년 운세는 어떤가요?"
-    ]
-    
-    for i, query in enumerate(test_queries, 1):
-        print(f"\n🔍 테스트 {i}: {query}")
-        print("-" * 50)
-        
-        start_time = time.time()
-        response = run_query(query)
-        execution_time = time.time() - start_time
-        
-        print(f"✅ 응답 생성 완료 ({execution_time:.2f}초)")
-        print(f"📝 응답 길이: {len(response)}자")
-        print(f"🎯 응답 미리보기: {response[:100]}...")
-        
-    print("\n🎉 시스템 테스트 완료!")
-
 if __name__ == "__main__":
     # 명령행 인자 처리
     if len(sys.argv) > 1:
-        if sys.argv[1] == "test":
-            test_system()
-        elif sys.argv[1] == "debug":
+        if sys.argv[1] == "debug":
             if len(sys.argv) > 2:
                 query = " ".join(sys.argv[2:])
-                result = handle_debug_query(f"debug:{query}")
+                # 명령행에서는 워크플로를 새로 생성
+                print("🔧 시스템 초기화 중...")
+                from langgraph_system.nodes import get_node_manager
+                get_node_manager()
+                print("⚙️ 워크플로 생성 중...")
+                app = create_workflow()
+                result = handle_debug_query(f"debug:{query}", app)
                 print(result)
             else:
                 print("❌ 디버그할 질문을 입력해주세요.")
@@ -202,7 +224,12 @@ if __name__ == "__main__":
         else:
             # 직접 쿼리 실행
             query = " ".join(sys.argv[1:])
-            response = run_query(query)
+            print("🔧 시스템 초기화 중...")
+            from langgraph_system.nodes import get_node_manager
+            get_node_manager()
+            print("⚙️ 워크플로 생성 중...")
+            app = create_workflow()
+            response = run_query_with_app(query, app)
             print(format_response(response))
     else:
         # 대화형 모드
