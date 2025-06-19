@@ -56,7 +56,7 @@ def format_response(response: str) -> str:
     
     return formatted
 
-def handle_debug_query(query: str, app) -> str:
+def handle_debug_query(query: str, app, conversation_history: list) -> str:
     """디버그 쿼리 처리"""
     if not query.startswith("debug:"):
         return None
@@ -69,7 +69,7 @@ def handle_debug_query(query: str, app) -> str:
     print("-" * 50)
     
     start_time = time.time()
-    response = run_query_with_app(actual_query, app)  # 미리 생성된 워크플로 사용
+    response = run_query_with_app(actual_query, app, conversation_history)
     execution_time = time.time() - start_time
     
     debug_info = f"""
@@ -82,7 +82,7 @@ def handle_debug_query(query: str, app) -> str:
 """
     return debug_info
 
-def handle_verbose_query(query: str, app) -> str:
+def handle_verbose_query(query: str, app, conversation_history: list) -> str:
     """상세 모드 쿼리 처리"""
     if not query.startswith("verbose:"):
         return None
@@ -95,7 +95,7 @@ def handle_verbose_query(query: str, app) -> str:
     print("=" * 60)
     
     start_time = time.time()
-    response = run_query_with_app(actual_query, app)  # 미리 생성된 워크플로 사용
+    response = run_query_with_app(actual_query, app, conversation_history)
     execution_time = time.time() - start_time
     
     print(f"\n⏱️  총 실행 시간: {execution_time:.2f}초")
@@ -103,13 +103,16 @@ def handle_verbose_query(query: str, app) -> str:
 
 
 
-def run_query_with_app(query: str, app) -> str:
-    """LangGraph 시스템으로 쿼리 실행 - 미리 생성된 워크플로 사용"""
+def run_query_with_app(query: str, app, conversation_history: list) -> str:
+    """LangGraph 시스템으로 쿼리 실행 - 대화 히스토리 유지"""
     print(f"🔍 쿼리 실행: {query}")
     
-    # 초기 상태 설정
-    initial_state = {
-        "messages": [HumanMessage(content=query)],
+    # 새로운 사용자 메시지를 히스토리에 추가
+    conversation_history.append(HumanMessage(content=query))
+    
+    # 현재 상태 설정 (전체 대화 히스토리 포함)
+    current_state = {
+        "messages": conversation_history.copy(),
         "next": None,
         "final_response": None,
         "sender": None
@@ -117,10 +120,13 @@ def run_query_with_app(query: str, app) -> str:
     
     try:
         print("🚀 워크플로 실행 중...")
-        result = app.invoke(initial_state)
+        result = app.invoke(current_state)
         
         final_response = result.get("final_response")
         if final_response:
+            # AI 응답도 히스토리에 추가
+            from langchain_core.messages import AIMessage
+            conversation_history.append(AIMessage(content=final_response))
             print("✅ 실행 완료!")
             return final_response
         else:
@@ -149,6 +155,7 @@ def main():
     
     session_id = f"session_{int(time.time())}"
     query_count = 0
+    conversation_history = []  # 🔥 대화 히스토리 초기화
     
     print("💬 질문을 입력해주세요 (종료: quit/exit):")
     
@@ -167,10 +174,11 @@ def main():
             if user_input.lower() == 'new':
                 session_id = str(uuid.uuid4())
                 query_count = 0
+                conversation_history = []  # 🔥 대화 히스토리 초기화
                 print(f"\n🔄 새로운 대화를 시작합니다. (세션 ID: {session_id[:8]}...)")
                 
                 # 환영 메시지 생성
-                welcome_response = run_query_with_app("안녕하세요! FortuneAI입니다. 무엇을 도와드릴까요?", app)
+                welcome_response = run_query_with_app("안녕하세요! FortuneAI입니다. 무엇을 도와드릴까요?", app, conversation_history)
                 print(f"🔮 FortuneAI: {welcome_response}")
                 print("-" * 60)
                 continue
@@ -204,19 +212,19 @@ def main():
             
             # 디버그 모드 처리
             if user_input.startswith("debug:"):
-                response = handle_debug_query(user_input, app)
+                response = handle_debug_query(user_input, app, conversation_history)
                 print(response)
                 continue
             
             # 상세 모드 처리
             if user_input.startswith("verbose:"):
-                response = handle_verbose_query(user_input, app)
+                response = handle_verbose_query(user_input, app, conversation_history)
                 print(f"\n📝 **최종 응답**\n{format_response(response)}")
                 continue
             
             # 일반 쿼리 실행 - 미리 생성된 워크플로 사용
             start_time = time.time()
-            response = run_query_with_app(user_input, app)  # 새로운 함수 사용
+            response = run_query_with_app(user_input, app, conversation_history)  # 대화 히스토리 전달
             execution_time = time.time() - start_time
             
             # 응답 출력
@@ -248,7 +256,8 @@ if __name__ == "__main__":
                 get_node_manager()
                 print("⚙️ 워크플로 생성 중...")
                 app = create_workflow()
-                result = handle_debug_query(f"debug:{query}", app)
+                conversation_history = []
+                result = handle_debug_query(f"debug:{query}", app, conversation_history)
                 print(result)
             else:
                 print("❌ 디버그할 질문을 입력해주세요.")
@@ -261,7 +270,8 @@ if __name__ == "__main__":
             get_node_manager()
             print("⚙️ 워크플로 생성 중...")
             app = create_workflow()
-            response = run_query_with_app(query, app)
+            conversation_history = []
+            response = run_query_with_app(query, app, conversation_history)
             print(format_response(response))
     else:
         # 대화형 모드
