@@ -5,7 +5,7 @@
 from typing import TypedDict, List, Dict, Any, Optional
 from langchain_core.messages import BaseMessage
 
-class SupervisorState(TypedDict):
+class SajuState(TypedDict):
     """메시지 기반 에이전트 상태"""
     
     # 메시지 히스토리 (핵심)

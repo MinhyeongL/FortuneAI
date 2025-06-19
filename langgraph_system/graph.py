@@ -6,7 +6,7 @@ from typing import Literal
 from langgraph.graph import StateGraph, END
 from langchain_core.messages import HumanMessage
 
-from .state import SupervisorState
+from .state import SajuState
 from .nodes import NodeManager
 
 # 전역 NodeManager 인스턴스 (한 번만 초기화)
@@ -21,7 +21,7 @@ def get_node_manager():
         print("✅ NodeManager 초기화 완료!")
     return _node_manager
 
-def route_supervisor(state: SupervisorState) -> str:
+def route_supervisor(state: SajuState) -> str:
     """Supervisor 결과에 따라 다음 노드 결정"""
     # Supervisor가 반환한 응답에서 다음 에이전트 추출
     messages = state["messages"]
@@ -35,9 +35,9 @@ def route_supervisor(state: SupervisorState) -> str:
         elif "WebAgent" in last_message:
             return "web_worker"
         elif "FINISH" in last_message:
-            return "response_generator"
+            return "result_generator"
     
-    return "response_generator"
+    return "result_generator"
 
 def create_graph():
     """NodeManager 기반 그래프 생성"""
@@ -52,7 +52,7 @@ def create_graph():
     response_generator = node_manager.create_response_generator_node()
     
     # 그래프 생성
-    workflow = StateGraph(SupervisorState)
+    workflow = StateGraph(SajuState)
     
     # 노드 추가
     workflow.add_node("supervisor", supervisor_node)

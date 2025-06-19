@@ -8,7 +8,7 @@ from datetime import datetime
 from langchain_core.messages import HumanMessage, SystemMessage
 from typing import Dict, Any, List
 
-from .state import SupervisorState
+from .state import SajuState
 from .agents import AgentManager
 from tools import ToolManager
 
@@ -42,12 +42,6 @@ class NodeManager:
         web_tools = self.tool_manager._get_web_tools()
         agent = self.agent_manager.create_web_agent(web_tools)
         return functools.partial(agent_node, agent=agent, name="WebAgent")
-    
-    def create_general_node(self):
-        """범용 노드 생성 - 모든 도구 사용"""
-        all_tools = self.tool_manager.get_tools()
-        agent = self.agent_manager.create_general_agent(all_tools)
-        return functools.partial(agent_node, agent=agent, name="GeneralAgent")
     
     def create_supervisor_node(self):
         """Supervisor 노드 생성 - 워크플로 관리 에이전트"""
