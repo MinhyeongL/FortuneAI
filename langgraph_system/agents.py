@@ -8,6 +8,14 @@ from langgraph.prebuilt import create_react_agent
 from pydantic import BaseModel
 from typing import Literal
 
+# prompts.py에서 프롬프트 함수들 import
+from prompts import (
+    get_saju_calculation_prompt,
+    get_saju_interpretation_prompt,
+    get_web_search_prompt,
+    get_supervisor_prompt
+)
+
 # 멤버 Agent 목록 정의
 members = ["SajuAgent", "RagAgent", "WebAgent"]
 
@@ -26,30 +34,9 @@ class AgentManager:
         self.llm = ChatOpenAI(model="gpt-4.1-mini", temperature=0)
     
     def create_supervisor_agent(self, tools):
-        """Supervisor ReAct 에이전트 생성"""
-        # 시스템 프롬프트 정의: 작업자 간의 대화를 관리하는 감독자 역할
-        system_prompt = (
-            "당신은 다음과 같은 전문 에이전트들로 구성된 다단계 워크플로를 관리하는 감독자입니다: {members}.\n"
-            "각 에이전트의 역할은 다음과 같습니다:\n"
-            "- SajuAgent: 사용자 입력에서 생년월일시 정보를 추출하고 사주팔자(년주, 월주, 일주, 시주)를 계산합니다.\n"
-            "- RagAgent: 계산된 사주 정보를 바탕으로 심층적인 사주 해석과 명리학적 분석을 제공합니다.\n"
-            "- WebAgent: 사주와 관련된 일반적이거나 개념적인 질문, 또는 일상적인 질문에 웹 검색을 통해 답변합니다.\n\n"
+        """Supervisor ReAct 에이전트 생성 - prompts.py 활용"""
+        system_prompt = get_supervisor_prompt()
 
-            "당신의 임무는 다음과 같습니다:\n"
-            "1. 사용자 요청을 가장 적절한 에이전트로 라우팅:\n"
-            "   - 사용자 입력에 생년월일시 정보가 포함되어 있으면, 반드시 SajuAgent를 먼저 호출하세요.\n"
-            "   - 중요: **SajuAgent 사용 후에는 반드시 RagAgent를 호출하여 계산된 사주 결과를 해석해야 합니다. 이 단계를 건너뛰지 마세요.**\n"
-            "   - 순수하게 일반적이거나 개념적인 사주 질문으로 계산이 필요하지 않다면, RagAgent를 직접 호출하세요.\n"
-            "   - 사주와 완전히 무관하거나 최신 정보 검색이 필요한 경우, WebAgent를 사용하세요.\n"
-            "   - 사용자 입력이 너무 짧거나 애매하거나 의미가 불분명한 경우(예: 'new', 'test', 'hello' 등), 바로 FINISH를 선택하세요.\n"
-            "2. SajuAgent 단독 사용 후 절대 워크플로를 종료하지 마세요. FINISH를 고려하기 전에 반드시 결과를 RagAgent에 전달하세요.\n"
-            "3. 사주와 완전히 무관한 질문은 WebAgent를 직접 사용하세요.\n"
-            "4. 모든 필요한 단계가 완료되면 FINISH로 응답하세요.\n"
-            "5. 사용자 입력이 의미가 없거나 처리할 수 없는 경우 즉시 FINISH로 응답하세요.\n"
-            "반드시 작업에 가장 논리적인 다음 에이전트를 결정하고 이 에이전트 순서를 엄격히 따라야 합니다."
-        )
-
-        # ChatPromptTemplate 생성
         prompt = ChatPromptTemplate.from_messages([
             ("system", system_prompt),
             MessagesPlaceholder(variable_name="messages"),
@@ -58,7 +45,10 @@ class AgentManager:
                 "위 대화를 바탕으로 다음에 어떤 에이전트가 작업해야 할까요? "
                 "또는 작업을 완료해야 할까요? 다음 중에서 선택하세요: {options}",
             ),
-        ]).partial(options=str(options_for_next), members=", ".join(members))
+        ]).partial(
+            options=str(options_for_next), 
+            members=", ".join(members)
+        )
         
         # Supervisor Agent 생성 (구조화된 출력 사용)
         def supervisor_agent(state):
@@ -68,25 +58,31 @@ class AgentManager:
         return supervisor_agent
     
     def create_saju_agent(self, tools):
-        """사주 계산 ReAct 에이전트 생성"""
+        """사주 계산 ReAct 에이전트 생성 - prompts.py 활용"""
+        system_prompt = get_saju_calculation_prompt()
+
         prompt = ChatPromptTemplate.from_messages([
-            ("system", "당신은 사주 전문가입니다. 생년월일시를 받아 사주팔자를 계산하고 해석하세요. 반드시 도구를 사용하여 정확한 계산을 수행하세요."),
+            ("system", system_prompt),
             MessagesPlaceholder(variable_name="messages")
         ])
         return create_react_agent(self.llm, tools=tools, prompt=prompt)
 
     def create_rag_agent(self, tools):
-        """RAG 검색 ReAct 에이전트 생성"""
+        """RAG 검색 ReAct 에이전트 생성 - prompts.py 활용"""
+        system_prompt = get_saju_interpretation_prompt()
+
         prompt = ChatPromptTemplate.from_messages([
-            ("system", "당신은 사주 해석 전문가입니다. 사주 관련 지식을 검색하고 해석하세요. 반드시 도구를 사용하여 정확한 정보를 찾으세요."),
+            ("system", system_prompt),
             MessagesPlaceholder(variable_name="messages")
         ])
         return create_react_agent(self.llm, tools=tools, prompt=prompt)
 
     def create_web_agent(self, tools):
-        """웹 검색 ReAct 에이전트 생성"""
+        """웹 검색 ReAct 에이전트 생성 - prompts.py 활용"""
+        system_prompt = get_web_search_prompt()
+
         prompt = ChatPromptTemplate.from_messages([
-            ("system", "당신은 웹 검색 전문가입니다. 최신 정보를 검색하세요. 반드시 도구를 사용하여 정확한 정보를 찾으세요."),
+            ("system", system_prompt),
             MessagesPlaceholder(variable_name="messages")
         ])
         return create_react_agent(self.llm, tools=tools, prompt=prompt)
@@ -94,7 +90,26 @@ class AgentManager:
     def create_general_agent(self, tools):
         """범용 ReAct 에이전트 생성"""
         prompt = ChatPromptTemplate.from_messages([
-            ("system", "당신은 사주 전문 상담사입니다. 주어진 도구들을 활용하여 사용자의 질문에 정확하고 전문적으로 답변하세요."),
+            ("system", 
+             """당신은 **종합 사주 상담 전문가**입니다. 모든 도구를 활용하여 사용자에게 완전한 사주 상담 서비스를 제공합니다.
+
+🎯 **역할:**
+• 사주 계산부터 해석까지 전 과정 담당
+• 사용자 요청에 따른 맞춤형 상담 제공
+• 다양한 도구들의 통합적 활용
+• 완성도 높은 종합 분석 결과 제시
+
+🛠️ **활용 도구:**
+• 사주 계산 도구 (만세력 기반)
+• RAG 검색 (명리학 지식베이스)
+• 웹 검색 (최신 정보 및 일반 지식)
+• 기타 필요한 모든 분석 도구
+
+💡 **접근 방식:**
+• 사용자 요청 분석 → 필요 도구 선택 → 단계별 처리
+• 정확성과 전문성을 바탕으로 한 신뢰할 수 있는 상담
+• 이론과 실용성의 균형 있는 조화
+• 개인별 맞춤형 조언 및 해석 제공"""),
             MessagesPlaceholder(variable_name="messages")
         ])
         return create_react_agent(self.llm, tools=tools, prompt=prompt)
@@ -102,12 +117,40 @@ class AgentManager:
     def create_response_generator_agent(self, tools):
         """응답 생성 ReAct 에이전트 생성"""
         prompt = ChatPromptTemplate.from_messages([
-            ("system", """당신은 최종 응답 생성 전문가입니다. 
-다른 에이전트들이 수집한 정보를 종합하여 사용자에게 완성도 높은 최종 답변을 제공하세요.
+            ("system", 
+             """당신은 **최종 응답 통합 및 품질 관리 전문가**입니다. 여러 에이전트들의 결과를 종합하여 완벽한 최종 답변을 생성합니다.
 
-- 여러 에이전트의 결과를 통합
-- 일관성 있고 이해하기 쉬운 응답 생성
-- 필요시 추가 검색을 통해 정보 보완"""),
+🎯 **핵심 임무:**
+• 다중 에이전트 결과의 통합 및 정리
+• 일관성 있고 완성도 높은 최종 응답 생성
+• 정보의 정확성 및 논리적 연결성 검증
+• 사용자 친화적인 형태로 정보 재구성
+
+📋 **통합 과정:**
+1. **정보 수집**: 각 에이전트별 분석 결과 정리
+2. **일관성 검토**: 상충되는 정보 식별 및 조정
+3. **구조화**: 논리적 순서로 정보 재배열
+4. **보완 검색**: 부족한 정보 추가 수집
+5. **최종 정리**: 완전하고 이해하기 쉬운 답변 작성
+
+💬 **응답 품질 기준:**
+• **완전성**: 사용자 질문에 대한 완전한 답변
+• **정확성**: 명리학적으로 정확하고 신뢰할 수 있는 내용
+• **명확성**: 전문 용어의 쉬운 설명과 구조화된 제시
+• **실용성**: 구체적이고 실행 가능한 조언 포함
+• **균형성**: 긍정적 측면과 주의사항의 균형
+
+🔧 **품질 개선 도구:**
+• 추가 정보 검색을 통한 내용 보강
+• 전문 용어 설명 및 예시 추가
+• 사용자 맞춤형 조언 및 권장사항 제시
+• 가독성 향상을 위한 구조화 및 포맷팅
+
+⚠️ **검증 사항:**
+• 각 에이전트 결과 간 모순 여부 확인
+• 명리학적 이론과의 부합성 검토
+• 사용자 질문과의 연관성 점검
+• 실용적 가치 및 적용 가능성 평가"""),
             MessagesPlaceholder(variable_name="messages")
         ])
         return create_react_agent(self.llm, tools=tools, prompt=prompt)
