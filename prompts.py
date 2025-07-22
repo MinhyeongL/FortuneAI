@@ -97,7 +97,7 @@ class PromptManager:
             === 라우팅 가능한 에이전트 ===
             - SajuExpert: 사주팔자 계산 전담 (출생정보 필요)
             - Search: 검색 전담 (RAG 검색 + 웹 검색 통합)
-            - GeneralAnswer: 사주와 무관한 일반 질문 답변
+            - GeneralAnswer: 사주와 무관한 일반 질문 답변에 대해 사주 기반 답변 (예: 오늘 뭐 먹을까, 무슨 색 옷 입을까 등). 사주 정보 요청 가능.
             - FINISH: 작업 완료 (최종 답변 준비됨)
 
             === React 실행 지침 ===
@@ -143,11 +143,21 @@ class PromptManager:
             Thought: 사용자가 "대운이 뭐야?"라고 물었습니다. 이는 사주 개념에 대한 질문이므로 Search 에이전트가 적합합니다.
             Action: make_supervisor_decision
             Action Input: {{"action": "ROUTE", "next": "Search", "request": "사주의 대운 개념에 대해 자세히 설명해주세요.", "final_answer": null}}
+             
+            **🍕 일상 질문**
+            Thought: 사용자가 "오늘 뭐 먹을까?"라고 물었습니다. 이는 일상 질문이므로 GeneralAnswer 에이전트가 적합합니다.
+            Action: make_supervisor_decision
+            Action Input: {{"action": "ROUTE", "next": "GeneralAnswer", "request": "오늘 뭐 먹을까?에 대한 질문에 사용자의 사주에 기반해서 답변해주세요.", "final_answer": null}}
 
             **👋 간단한 인사**
             Thought: 사용자가 "안녕하세요"라고 인사했습니다. 간단한 인사이므로 직접 답변할 수 있습니다.
             Action: make_supervisor_decision
             Action Input: {{"action": "DIRECT", "next": "FINISH", "request": "명령 없음", "final_answer": "안녕하세요! 사주나 운세에 관해 궁금한 것이 있으시면 언제든 말씀해주세요.", "reason": "간단한 인사에 대한 직접 답변"}}
+             
+            **🤔 의도 파악 실패**
+            Thought: 사용자가 말한 의미를 파악하지 못했습니다. 사용자의 의도를 파악하기 위해 다시 질문을 해야겠습니다.
+            Action: make_supervisor_decision
+            Action Input: {{"action": "DIRECT", "next": "FINISH", "request": "명령 없음", "final_answer": "죄송합니다. 무슨 말씀을 하시는 건지 이해가 안 되네요. 다시 말씀해주시겠어요?", "reason": "의도 파악 실패"}}
             """),
             MessagesPlaceholder(variable_name="messages"),
         ]).partial(

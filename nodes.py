@@ -49,10 +49,22 @@ class NodeManager:
         
         updated_state = state.copy()
 
+        decision_data = None
         for msg in reversed(response["messages"]):
             if hasattr(msg, 'name') and msg.name == "make_supervisor_decision":
-                decision_data = json.loads(msg.content)
-                break
+                try:
+                    decision_data = json.loads(msg.content)
+                    break
+                except Exception:
+                    continue
+            if isinstance(msg.content, str) and "Action: make_supervisor_decision" in msg.content:
+                match = re.search(r'Action Input:\s*({.*})', msg.content, re.DOTALL)
+                if match:
+                    try:
+                        decision_data = json.loads(match.group(1))
+                        break
+                    except Exception:
+                        continue
 
         updated_state["next"] = decision_data.get("next")
         updated_state["request"] = decision_data.get("request")
