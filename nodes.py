@@ -40,8 +40,6 @@ class NodeManager:
             "messages": state.get("messages", [HumanMessage(content=state.get("question", ""))]),
         })
         
-        updated_state = state.copy()
-
         decision_data = None
         for msg in reversed(response["messages"]):
             if hasattr(msg, 'name') and msg.name == "make_supervisor_decision":
@@ -59,14 +57,14 @@ class NodeManager:
                     except Exception:
                         continue
 
-        updated_state["next"] = decision_data.get("next")
-        updated_state["request"] = decision_data.get("request")
-        updated_state["birth_info"] = decision_data.get("birth_info")
-        updated_state["query_type"] = decision_data.get("query_type")
-        updated_state["final_answer"] = decision_data.get("final_answer")
-        updated_state["messages"] = response["messages"]
-
-        return updated_state
+        return {
+            "next": decision_data.get("next"),
+            "request": decision_data.get("request"),
+            "birth_info": decision_data.get("birth_info"),
+            "query_type": decision_data.get("query_type"),
+            "final_answer": decision_data.get("final_answer"),
+            "messages": response["messages"],
+        }
 
     def saju_expert_agent_node(self, state):
         """Saju Expert Agent 노드"""
@@ -107,17 +105,15 @@ class NodeManager:
         })
        
         output = json.loads(response["output"]) if isinstance(response["output"], str) else response["output"]
-
-        updated_state = state.copy()
         
-        updated_state["request"] = output.get("request")
-        output.pop("request")
+        updated_request = output.pop("request")
         
-        updated_state["saju_result"] = output
-        updated_state["next"] = "Supervisor"
-        updated_state["messages"].append(AIMessage(content=output.get("saju_analysis")))
-        
-        return updated_state
+        return {
+            "request": updated_request,
+            "saju_result": output,
+            "next": "Supervisor",
+            "messages": [AIMessage(content=output.get("saju_analysis"))],
+        }
 
     def search_agent_node(self, state):
         """Search Agent 노드 (RAG + 웹검색 통합)"""
@@ -145,13 +141,12 @@ class NodeManager:
 
         output = json.loads(response["output"]) if isinstance(response["output"], str) else response["output"]
 
-        updated_state = state.copy()
-        updated_state["retrieved_docs"] = output.get("retrieved_docs", [])
-        updated_state["web_search_results"] = output.get("web_search_results", [])
-        updated_state["request"] = output.get("request")
-        updated_state["messages"].append(AIMessage(content=output.get("generated_result")))
-
-        return updated_state
+        return {
+            "retrieved_docs": output.get("retrieved_docs", []),
+            "web_search_results": output.get("web_search_results", []),
+            "request": output.get("request"),
+            "messages": [AIMessage(content=output.get("generated_result"))],
+        }
 
     def general_answer_agent_node(self, state):
         """General Answer Agent 노드"""
@@ -179,12 +174,11 @@ class NodeManager:
 
         output = json.loads(response["output"]) if isinstance(response["output"], str) else response["output"]
 
-        updated_state = state.copy()
-        updated_state["general_answer"] = output.get("general_answer")
-        updated_state["request"] = output.get("request")
-        updated_state["messages"].append(AIMessage(content=output.get("general_answer")))
-
-        return updated_state
+        return {
+            "general_answer": output.get("general_answer"),
+            "request": output.get("request"),
+            "messages": [AIMessage(content=output.get("general_answer"))],
+        }
 
 
 # 전역 NodeManager 인스턴스

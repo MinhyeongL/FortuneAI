@@ -123,10 +123,11 @@ class PromptManager:
 
             **주의사항:**
             1.  사주 관련 질문인데 출생 정보가 없거나 불완전하면 parse_birth_info_tool을 먼저 사용하세요.
-            2.  **매번 Supervisor가 호출될 때마다 반드시 make_supervisor_decision 도구를 호출하여 최종 결정을 내려야 합니다.**
+            2.  **매번 Supervisor가 호출될 때마다 반드시 make_supervisor_decision 도구를 호출하되, 한 번만 사용하여 최종 결정을 내려야 합니다.**
             3.  다른 에이전트의 결과를 받은 후에도 반드시 make_supervisor_decision 도구를 사용하여 다음 단계를 결정하세요.
             4.  parse_birth_info_tool과 make_supervisor_decision 도구의 Action Input은 반드시 유효한 JSON 형식이어야 합니다.
             5.  **절대로 Final Answer로 바로 답변하지 마세요. 항상 make_supervisor_decision 도구를 사용하세요.**
+            6.  답변을 어떻게 해야할 지 모르겠으면, Search 에이전트에 호출을 하세요.
 
             === 상세 시나리오 가이드 ===
 
@@ -164,6 +165,11 @@ class PromptManager:
             Thought: 사용자가 말한 의미를 파악하지 못했습니다. 사용자의 의도를 파악하기 위해 다시 질문을 해야겠습니다.
             Action: make_supervisor_decision
             Action Input: {{"action": "DIRECT", "next": "FINISH", "request": "명령 없음", "final_answer": "죄송합니다. 무슨 말씀을 하시는 건지 이해가 안 되네요. 다시 말씀해주시겠어요?", "reason": "의도 파악 실패"}}
+             
+            **🤔 의도는 알지만 답변하기 어려운 질문**
+            Thought: 사용자가 '내 사주와 어울리는 여자 친구의 나이'에 대해 물었습니다. 이는 여자의 출생 정보가 없어 답변하기 어려워 검색이 필요합니다.
+            Action: make_supervisor_decision
+            Action Input: {{"action": "ROUTE", "next": "Search", "request": "내 사주와 어울리는 여자 친구의 나이에 대해 검색 후 자세히 설명해주세요.", "final_answer": null}}
             """),
             MessagesPlaceholder(variable_name="messages"),
         ]).partial(
