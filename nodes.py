@@ -2,16 +2,8 @@
 노드 함수들 - NodeManager 클래스로 노드 생성 및 관리
 """
 from datetime import datetime
-from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain_core.messages import AIMessage, HumanMessage
-from langchain_openai import ChatOpenAI
-from pydantic import BaseModel
-from typing import Literal, Optional
-import functools
-import operator
-from typing import Sequence, Annotated, Dict, List, Any, Optional
-from typing_extensions import TypedDict
-from langchain_core.messages import BaseMessage
+from langgraph.graph.message import add_messages
 import re
 import json
 
@@ -39,6 +31,7 @@ class NodeManager:
             "query_type": state.get("query_type", "unknown"),
             "retrieved_docs": state.get("retrieved_docs", []),
             "web_search_results": state.get("web_search_results", []),
+            "request": state.get("request", ""),
         }
         
         supervisor_agent = self.agent_manager.create_supervisor_agent(input_state)
@@ -83,8 +76,7 @@ class NodeManager:
         session_id = state.get("session_id", "unknown")
         session_start_time = state.get("session_start_time", "unknown")
         messages = state.get("messages", [])
-
-        supervisor_command = state.get("messages")[-1].content
+        request = state.get("request", "")
 
         year = state.get("birth_info", {}).get("year")
         month = state.get("birth_info", {}).get("month")
@@ -102,7 +94,7 @@ class NodeManager:
             "current_time": current_time,
             "session_id": session_id,
             "session_start_time": session_start_time,
-            "supervisor_command": supervisor_command,
+            "request": request,
             "year": year,
             "month": month,
             "day": day,
@@ -117,9 +109,14 @@ class NodeManager:
         output = json.loads(response["output"]) if isinstance(response["output"], str) else response["output"]
 
         updated_state = state.copy()
+        
+        updated_state["request"] = output.get("request")
+        output.pop("request")
+        
         updated_state["saju_result"] = output
+        updated_state["next"] = "Supervisor"
         updated_state["messages"].append(AIMessage(content=output.get("saju_analysis")))
-
+        
         return updated_state
 
     def search_agent_node(self, state):
@@ -131,7 +128,7 @@ class NodeManager:
         session_start_time = state.get("session_start_time", "unknown")
         messages = state.get("messages", [])
         question = state.get("question", "")
-        supervisor_command = state.get("messages")[-1].content
+        request = state.get("request", "")
         saju_result = state.get("saju_result", "")
 
         search_agent = self.agent_manager.create_search_agent()
@@ -140,7 +137,7 @@ class NodeManager:
             "current_time": current_time,
             "session_id": session_id,
             "session_start_time": session_start_time,
-            "supervisor_command": supervisor_command,
+            "request": request,
             "question": question,
             "saju_result": saju_result,
             "messages": messages,
@@ -151,6 +148,7 @@ class NodeManager:
         updated_state = state.copy()
         updated_state["retrieved_docs"] = output.get("retrieved_docs", [])
         updated_state["web_search_results"] = output.get("web_search_results", [])
+        updated_state["request"] = output.get("request")
         updated_state["messages"].append(AIMessage(content=output.get("generated_result")))
 
         return updated_state
@@ -164,7 +162,8 @@ class NodeManager:
         session_start_time = state.get("session_start_time", "unknown")
         messages = state.get("messages", [])
         question = state.get("question", "")
-        supervisor_command = state.get("messages")[-1].content
+        request = state.get("request", "")
+        saju_result = state.get("saju_result", "")
 
         general_answer_agent = self.agent_manager.create_general_answer_agent()
 
@@ -172,15 +171,17 @@ class NodeManager:
             "current_time": current_time,
             "session_id": session_id,
             "session_start_time": session_start_time,
-            "supervisor_command": supervisor_command,
+            "request": request,
             "question": question,
             "messages": messages,
+            "saju_result": saju_result,
         })
 
         output = json.loads(response["output"]) if isinstance(response["output"], str) else response["output"]
 
         updated_state = state.copy()
         updated_state["general_answer"] = output.get("general_answer")
+        updated_state["request"] = output.get("request")
         updated_state["messages"].append(AIMessage(content=output.get("general_answer")))
 
         return updated_state

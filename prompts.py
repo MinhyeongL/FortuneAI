@@ -14,7 +14,7 @@ class SupervisorResponse(BaseModel):
     """Supervisor 응답 모델"""
     action: Literal[*supervisor_options] = Field(description="수행할 액션")
     next: Optional[Literal[*members]] = Field(default=None, description="다음에 실행할 에이전트")
-    request: str = Field(default="명령 없음", description="에이전트에게 전달할 명령 메시지. 직접 답변/출생정보 요청 등 에이전트 호출이 필요 없는 경우 반드시 빈 문자열이나 '명령 없음'으로 반환할 것.")
+    request: str = Field(default=None, description="다음 에이전트에게 전달할 명령 메시지.")
     reason: Optional[str] = Field(default=None, description="결정 이유")
     birth_info: Optional[dict] = Field(default=None, description="파싱된 출생 정보")
     query_type: Optional[str] = Field(default=None, description="질의 유형")
@@ -46,6 +46,8 @@ class SajuExpertResponse(BaseModel):
     # 사주 해석 결과
     saju_analysis: str = Field(description="사주 해석 결과")
 
+    request: str = Field(default=None, description="다음 에이전트에게 전달할 명령 메시지.")
+
 
 class SearchResponse(BaseModel):
     """Search 응답 모델"""
@@ -53,11 +55,13 @@ class SearchResponse(BaseModel):
     retrieved_docs: List[Dict[str, Any]] = Field(default=[], description="RAG 검색된 문서")
     web_search_results: List[Dict[str, Any]] = Field(default=[], description="웹 검색 결과")
     generated_result: str = Field(description="검색 결과 기반 생성된 답변")
+    request: str = Field(default=None, description="다음 에이전트에게 전달할 명령 메시지.")
 
 
 class GeneralAnswerResponse(BaseModel):
     """General Answer 응답 모델"""
     general_answer: str = Field(description="일반 질문 답변")
+    request: str = Field(default=None, description="다음 에이전트에게 전달할 명령 메시지.")
 
 
 class PromptManager:
@@ -74,6 +78,7 @@ class PromptManager:
         query_type = input_state.get("query_type", "unknown")
         retrieved_docs = input_state.get("retrieved_docs", [])
         web_search_results = input_state.get("web_search_results", [])
+        request = input_state.get("request", "")
 
         return ChatPromptTemplate.from_messages([
             ("system", """
@@ -83,6 +88,7 @@ class PromptManager:
             세션 ID: {session_id}, 세션 시작: {session_start_time}
 
             === 현재 상태 정보 ===
+            에이전트 요청 메시지: {request}
             유저 메시지: {question}
             질의 유형: {query_type}
             출생 정보: {birth_info}
@@ -170,6 +176,7 @@ class PromptManager:
             saju_result=saju_result,
             retrieved_docs=retrieved_docs,
             web_search_results=web_search_results,
+            request=request,
         )
 
     def saju_expert_system_prompt(self):
@@ -183,10 +190,8 @@ class PromptManager:
             현재 시각: {current_time}
             세션 ID: {session_id}, 세션 시작: {session_start_time}
 
-            === Supervisor 명령 ===
-            {supervisor_command}
-
             === 입력 정보 ===
+            - 에이전트 요청 메시지: {request}
             - 출생 연도: {year}
             - 출생 월: {month}
             - 출생 일: {day}
@@ -200,6 +205,7 @@ class PromptManager:
             2. 사주 해석(saju_analysis)은 사용자 질문을 고려하여 분석 결과에 대해 자세하게 제공해주세요.
             3. 오행 강약, 십신 분석, 대운 등은 사용자가 추가로 요청하거나, 질문에 포함된 경우에만 tool을 호출해 결과를 추가하세요.
             4. 모든 결과는 SajuExpertResponse JSON 포맷으로 반환하세요.
+            5. 이후 다음 에이전트에게 전달할 명령 메시지를 request 필드에 추가하세요.
 
             === 응답 포맷 ===
             {instructions_format}
@@ -217,7 +223,8 @@ class PromptManager:
               "element_strength": {{"목": 15, "화": 20, "토": 10, "금": 8, "수": 12}},
               "ten_gods": {{"년주": ["정재"], "월주": ["편관"], "일주": ["비견"], "시주": ["식신"]}},
               "great_fortunes": [{{"age": 32, "pillar": "경신", "years": "2027~2036"}}],
-              "saju_analysis": "당신의 사주팔자는 갑진(甲寅) 년주, 을사(乙巳) 월주, 병오(丙午) 일주, 정미(丁未) 시주로 구성되어 있습니다. 일간은 병화(丙火)로, 밝고 적극적인 성향을 가졌습니다. 올해는 재물운이 강하게 들어오니 새로운 도전을 해보는 것이 좋겠습니다."
+              "saju_analysis": "당신의 사주팔자는 갑진(甲寅) 년주, 을사(乙巳) 월주, 병오(丙午) 일주, 정미(丁未) 시주로 구성되어 있습니다. 일간은 병화(丙火)로, 밝고 적극적인 성향을 가졌습니다. 올해는 재물운이 강하게 들어오니 새로운 도전을 해보는 것이 좋겠습니다.",
+              "request": "사주 계산 결과를 바탕으로 사주 해석을 제공해주세요."
             }}
 
             === 응답 지침 ===
@@ -242,10 +249,8 @@ class PromptManager:
             현재 시각: {current_time}
             세션 ID: {session_id}, 세션 시작: {session_start_time}
 
-            === Supervisor 명령 ===
-            {supervisor_command}
-
             === 입력 정보 ===
+            - 에이전트 요청 메시지: {request}
             - 사용자 질문: {question}
             - 사주 계산 결과: {saju_result}
 
@@ -267,6 +272,8 @@ class PromptManager:
                - 먼저 pdf_retriever로 전문 지식 검색
                - 부족한 부분은 웹 검색으로 보완
 
+            4. 이후 다음 에이전트에게 전달할 명령 메시지를 request 필드에 추가하세요.
+             
             === 응답 포맷 ===
             {instructions_format}
 
@@ -275,7 +282,8 @@ class PromptManager:
               "search_type": "rag_search",
               "retrieved_docs": [{{"context": "검색된 사주의 내용", "metadata": {{"source": "검색된 문서의 출처"}}}}],
               "web_search_results": [],
-              "generated_result": "검색 결과를 바탕으로 생성된 답변"
+              "generated_result": "검색 결과를 바탕으로 생성된 답변",
+              "request": "검색 결과를 바탕으로 생성된 답변을 제공해주세요."
             }}
             """),
             MessagesPlaceholder(variable_name="messages"),
@@ -293,10 +301,8 @@ class PromptManager:
             현재 시각: {current_time}
             세션 ID: {session_id}, 세션 시작: {session_start_time}
 
-            === Supervisor 명령 ===
-            {supervisor_command}
-
             === 입력 정보 ===
+            - 에이전트 요청 메시지: {request}
             - 사용자 질문: {question}
             - 사용자 사주 정보: {saju_result}
 
@@ -304,14 +310,20 @@ class PromptManager:
             1. 사용자의 질문이 일상 조언(예: 오늘 뭐 먹을까, 무슨 색 옷 입을까 등)이라면, 반드시 사주 정보와 오늘의 일진/오행을 참고하여 맞춤형으로 구체적이고 실용적인 조언을 해주세요.
             2. 사주적 근거(오행, 기운, 일진 등)를 반드시 설명과 함께 포함하세요.
             3. 일반 상식 질문에는 기존 방식대로 답변하세요.
+            4. 이후 다음 에이전트에게 전달할 명령 메시지를 request 필드에 추가하세요.
 
-            === 예시 ===
-            - 질문: 오늘 뭐 먹을까?
-            - 사주 정보: 1990년 5월 10일 14시생, 남자
-            - 오늘의 일진: 화(火) 기운이 강함, 목(木) 기운이 부족함
-            - 답변 예시: 오늘은 화(火) 기운이 강한 날입니다. 님의 사주에는 목(木) 기운이 부족하므로, 신선한 채소나 나물류, 혹은 매운 음식(예: 김치찌개, 불고기 등)을 드시면 운이 상승할 수 있습니다.
-
+            === 주의사항 ===
+            1. 사용자 사주 정보가 없으면 Supervisor에게 사주 정보를 요청하세요.
+            2. 사주 정보가 필요없으면 사용자의 질문에 대해 일반 질문 답변을 해주세요.
+            
+            === 응답 포맷 ===
             {instructions_format}
+
+            === 응답 포맷 예시 ===
+            {{
+              "general_answer": "오늘은 화(火) 기운이 강한 날입니다. 님의 사주에는 목(木) 기운이 부족하므로, 신선한 채소나 나물류, 혹은 매운 음식(예: 김치찌개, 불고기 등)을 드시면 운이 상승할 수 있습니다.",
+              "request": "답변이 완성되었습니다. 사용자의 질문에 대해 친절한 어투로 답변해주세요."
+            }}
             """),
             MessagesPlaceholder(variable_name="messages"),
             MessagesPlaceholder(variable_name="agent_scratchpad")
