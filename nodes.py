@@ -26,8 +26,9 @@ class NodeManager:
             "current_time": state.get("current_time", datetime.now().strftime("%Y-%m-%d %H:%M:%S")),
             "session_id": state.get("session_id", "unknown"),
             "session_start_time": state.get("session_start_time", "unknown"),
-            "birth_info": state.get("birth_info"),
-            "saju_result": state.get("saju_result"),
+            "birth_info": state.get("birth_info", {}),
+            "saju_info": state.get("saju_info", {}),
+            "saju_analysis": state.get("saju_analysis", ""),
             "query_type": state.get("query_type", "unknown"),
             "retrieved_docs": state.get("retrieved_docs", []),
             "web_search_results": state.get("web_search_results", []),
@@ -40,7 +41,7 @@ class NodeManager:
             "messages": state.get("messages", [HumanMessage(content=state.get("question", ""))]),
         })
         
-        decision_data = None
+        decision_data = {}
         for msg in reversed(response["messages"]):
             if hasattr(msg, 'name') and msg.name == "make_supervisor_decision":
                 try:
@@ -48,21 +49,25 @@ class NodeManager:
                     break
                 except Exception:
                     continue
-            if isinstance(msg.content, str) and "Action: make_supervisor_decision" in msg.content:
-                match = re.search(r'Action Input:\s*({.*})', msg.content, re.DOTALL)
+            if isinstance(msg.content, str):
+                match = re.search(r'Action: (?:functions\.)?make_supervisor_decision\s*\nAction Input:\s*({.*})', msg.content, re.DOTALL)
                 if match:
                     try:
-                        decision_data = json.loads(match.group(1))
+                        parsed_data = json.loads(match.group(1))
+                        # decision 키가 있으면 그 안의 내용을, 없으면 전체를 사용
+                        decision_data = parsed_data.get("decision", parsed_data)
                         break
                     except Exception:
                         continue
+        
+        decision_birth_info = decision_data.get("birth_info")
 
         return {
-            "next": decision_data.get("next"),
-            "request": decision_data.get("request"),
-            "birth_info": decision_data.get("birth_info"),
-            "query_type": decision_data.get("query_type"),
-            "final_answer": decision_data.get("final_answer"),
+            "next": decision_data.get("next", "FINISH"),
+            "request": decision_data.get("request", ""),
+            "birth_info": decision_birth_info if decision_birth_info is not None else state.get("birth_info", {}),
+            "query_type": decision_data.get("query_type", "unknown"),
+            "final_answer": decision_data.get("final_answer", "처리 중 오류가 발생했습니다. 다시 질문해주세요."),
             "messages": response["messages"],
         }
 
@@ -84,7 +89,7 @@ class NodeManager:
         gender = "남자" if state.get("birth_info", {}).get("is_male") else "여자"
         is_leap_month = state.get("birth_info", {}).get("is_leap_month")
 
-        saju_result = state.get("saju_result", "")
+        saju_info = state.get("saju_info", {})
 
         saju_expert_agent = self.agent_manager.create_saju_expert_agent()
 
@@ -100,19 +105,21 @@ class NodeManager:
             "minute": minute,
             "gender": gender,
             "is_leap_month": is_leap_month,
-            "saju_result": saju_result,
+            "saju_info": saju_info,
             "messages": messages,
         })
        
         output = json.loads(response["output"]) if isinstance(response["output"], str) else response["output"]
         
         updated_request = output.pop("request")
+        saju_analysis = output.pop("saju_analysis")
         
         return {
             "request": updated_request,
-            "saju_result": output,
+            "saju_info": output,
+            "saju_analysis": saju_analysis,
             "next": "Supervisor",
-            "messages": [AIMessage(content=output.get("saju_analysis"))],
+            "messages": [AIMessage(content=saju_analysis)],
         }
 
     def search_agent_node(self, state):
@@ -125,7 +132,7 @@ class NodeManager:
         messages = state.get("messages", [])
         question = state.get("question", "")
         request = state.get("request", "")
-        saju_result = state.get("saju_result", "")
+        saju_info = state.get("saju_info", {})
 
         search_agent = self.agent_manager.create_search_agent()
 
@@ -135,7 +142,7 @@ class NodeManager:
             "session_start_time": session_start_time,
             "request": request,
             "question": question,
-            "saju_result": saju_result,
+            "saju_info": saju_info,
             "messages": messages,
         })
 
@@ -144,7 +151,7 @@ class NodeManager:
         return {
             "retrieved_docs": output.get("retrieved_docs", []),
             "web_search_results": output.get("web_search_results", []),
-            "request": output.get("request"),
+            "request": output.get("request", ""),
             "messages": [AIMessage(content=output.get("generated_result"))],
         }
 
@@ -158,7 +165,7 @@ class NodeManager:
         messages = state.get("messages", [])
         question = state.get("question", "")
         request = state.get("request", "")
-        saju_result = state.get("saju_result", "")
+        saju_info = state.get("saju_info", {})
 
         general_answer_agent = self.agent_manager.create_general_answer_agent()
 
@@ -169,7 +176,7 @@ class NodeManager:
             "request": request,
             "question": question,
             "messages": messages,
-            "saju_result": saju_result,
+            "saju_info": saju_info,
         })
 
         output = json.loads(response["output"]) if isinstance(response["output"], str) else response["output"]

@@ -46,7 +46,7 @@ class SajuExpertResponse(BaseModel):
     # 사주 해석 결과
     saju_analysis: str = Field(description="사주 해석 결과")
 
-    request: str = Field(default=None, description="다음 에이전트에게 전달할 명령 메시지.")
+    request: str = Field(description="다음 에이전트에게 전달할 명령 메시지.")
 
 
 class SearchResponse(BaseModel):
@@ -55,13 +55,13 @@ class SearchResponse(BaseModel):
     retrieved_docs: List[Dict[str, Any]] = Field(default=[], description="RAG 검색된 문서")
     web_search_results: List[Dict[str, Any]] = Field(default=[], description="웹 검색 결과")
     generated_result: str = Field(description="검색 결과 기반 생성된 답변")
-    request: str = Field(default=None, description="다음 에이전트에게 전달할 명령 메시지.")
+    request: str = Field(description="다음 에이전트에게 전달할 명령 메시지.")
 
 
 class GeneralAnswerResponse(BaseModel):
     """General Answer 응답 모델"""
     general_answer: str = Field(description="일반 질문 답변")
-    request: str = Field(default=None, description="다음 에이전트에게 전달할 명령 메시지.")
+    request: str = Field(description="다음 에이전트에게 전달할 명령 메시지.")
 
 
 class PromptManager:
@@ -74,7 +74,8 @@ class PromptManager:
         session_id = input_state.get("session_id", "unknown")
         session_start_time = input_state.get("session_start_time", "unknown")
         birth_info = input_state.get("birth_info")
-        saju_result = input_state.get("saju_result")
+        saju_info = input_state.get("saju_info")
+        saju_analysis = input_state.get("saju_analysis")
         query_type = input_state.get("query_type", "unknown")
         retrieved_docs = input_state.get("retrieved_docs", [])
         web_search_results = input_state.get("web_search_results", [])
@@ -92,7 +93,8 @@ class PromptManager:
             유저 메시지: {question}
             질의 유형: {query_type}
             출생 정보: {birth_info}
-            사주 계산 결과: {saju_result}
+            사주 정보: {saju_info}
+            사주 해석: {saju_analysis}
             검색된 문서: {retrieved_docs}
             웹 검색 결과: {web_search_results}
                             
@@ -179,7 +181,8 @@ class PromptManager:
             question=question,
             query_type=query_type,
             birth_info=birth_info,
-            saju_result=saju_result,
+            saju_info=saju_info,
+            saju_analysis=saju_analysis,
             retrieved_docs=retrieved_docs,
             web_search_results=web_search_results,
             request=request,
@@ -204,7 +207,7 @@ class PromptManager:
             - 출생 시: {hour}시 {minute}분
             - 성별: {gender}
             - 윤달 여부: {is_leap_month}
-            - 사주 계산 결과: {saju_result}
+            - 사주 정보: {saju_info}
 
             === 당신의 역할 ===
             1. Supervisor의 명령에 따라 calculate_saju_tool을 사용해 사주팔자(년주, 월주, 일주, 시주, 일간, 나이 등)를 계산합니다.
@@ -258,7 +261,7 @@ class PromptManager:
             === 입력 정보 ===
             - 에이전트 요청 메시지: {request}
             - 사용자 질문: {question}
-            - 사주 계산 결과: {saju_result}
+            - 사주 정보: {saju_info}
 
             === 사용 가능한 도구 ===
             1. pdf_retriever: 사주 관련 전문 문서 검색 (사주 해석, 십신, 오행, 대운 등)
@@ -310,7 +313,7 @@ class PromptManager:
             === 입력 정보 ===
             - 에이전트 요청 메시지: {request}
             - 사용자 질문: {question}
-            - 사용자 사주 정보: {saju_result}
+            - 사용자 사주 정보: {saju_info}
 
             === 당신의 역할 ===
             1. 사용자의 질문이 일상 조언(예: 오늘 뭐 먹을까, 무슨 색 옷 입을까 등)이라면, 반드시 사주 정보와 오늘의 일진/오행을 참고하여 맞춤형으로 구체적이고 실용적인 조언을 해주세요.
