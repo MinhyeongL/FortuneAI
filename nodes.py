@@ -50,7 +50,7 @@ class NodeManager:
                 except Exception:
                     continue
             if isinstance(msg.content, str):
-                match = re.search(r'Action: (?:functions\.)?make_supervisor_decision\s*\nAction Input:\s*({.*})', msg.content, re.DOTALL)
+                match = re.search(r'Action: (?:functions\.)?make_supervisor_decision\s*\nAction Input:\s*({[^}]*})', msg.content, re.DOTALL)
                 if match:
                     try:
                         parsed_data = json.loads(match.group(1))
@@ -58,7 +58,15 @@ class NodeManager:
                         decision_data = parsed_data.get("decision", parsed_data)
                         break
                     except Exception:
-                        continue
+                        try:
+                            # 전체 content에서 JSON 부분만 추출하여 파싱
+                            json_match = re.search(r'Action Input:\s*({[^}]*})', msg.content, re.DOTALL)
+                            if json_match:
+                                parsed_data = json.loads(json_match.group(1))
+                                decision_data = parsed_data.get("decision", parsed_data)
+                                break
+                        except Exception:
+                            continue
         
         decision_birth_info = decision_data.get("birth_info")
 
