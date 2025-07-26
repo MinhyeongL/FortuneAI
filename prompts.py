@@ -153,6 +153,11 @@ class PromptManager:
             Action: make_supervisor_decision
             Action Input: {{"action": "ROUTE", "next": "Search", "request": "사주의 대운 개념에 대해 자세히 설명해주세요.", "final_answer": null}}
              
+            **📚 사주 개념 질문 (띠 정보)**
+            Thought: 사용자가 "1995년 돼지띠의 특징이 뭐야?"라고 물었습니다. 이는 띠 정보에 대한 질문이므로 Search 에이전트가 적합합니다.
+            Action: make_supervisor_decision
+            Action Input: {{"action": "ROUTE", "next": "Search", "request": "1995년 돼지띠의 특징에 대해 자세히 설명해주세요.", "final_answer": null}}
+             
             **🍕 일상 질문**
             Thought: 사용자가 "오늘 뭐 먹을까?"라고 물었습니다. 이는 일상 질문이므로 GeneralAnswer 에이전트가 적합합니다.
             Action: make_supervisor_decision
