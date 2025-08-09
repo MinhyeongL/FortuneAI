@@ -7,16 +7,21 @@ import os
 import sys
 import time
 from datetime import datetime
+from typing import Optional, List, Dict, Any
 from langchain_core.messages import HumanMessage, AIMessage
-# from langchain_teddynote.messages import stream_graph  # 더 이상 사용하지 않음
+from logger_config import get_logger
+
+# 로거 인스턴스 생성
+logger = get_logger("Utils")
 
 
 # ================================
 # UI / 디스플레이 관련 함수들
 # ================================
 
-def print_banner():
+def print_banner() -> None:
     """시스템 배너 출력"""
+    logger.info("시스템 배너 출력")
     print("=" * 70)
     print("🔮 FortuneAI - LangGraph 사주 시스템 🔮")
     print("=" * 70)
@@ -34,11 +39,10 @@ def print_banner():
     print("  • 운세 상담: '1995년 8월 26일생 2024년 연애운'")
     print("  • 일반 검색: '사주에서 십신이란?'")
     print("  • 종료: 'quit' 또는 'exit'")
-    print("  • 성능분석: '--debug' 또는 'debug:질문' (실행시간 분석)")
     print("=" * 70)
 
 
-def print_system_info():
+def print_system_info() -> None:
     """시스템 정보 출력"""
     print("\n🔧 시스템 정보:")
     print(f"  • 실행 시간: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
@@ -51,6 +55,7 @@ def print_system_info():
 
 def format_response(response: str) -> str:
     """응답 포맷팅"""
+    logger.debug(f"응답 포맷팅 시작 - 길이: {len(response) if response else 0}")
     if not response:
         return "❌ 응답을 생성할 수 없습니다."
     
@@ -64,8 +69,9 @@ def format_response(response: str) -> str:
     return formatted
 
 
-def print_help():
+def print_help() -> None:
     """도움말 출력"""
+    logger.info("도움말 요청")
     print("""
 📚 **FortuneAI 사용 가이드**
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -77,7 +83,6 @@ def print_help():
   • new, clear      : 새로운 세션 시작
   • help, ?         : 도움말 보기
   • quit, exit      : 프로그램 종료
-  • debug:질문      : 성능 분석 모드로 실행
 
 🏗️  **워크플로 구조**:
   1. Supervisor: 질문 분석 후 적절한 에이전트로 라우팅
@@ -87,7 +92,6 @@ def print_help():
 
 🎯 **출력 방식**:
   • 기본: 모든 노드의 상세한 실행 과정과 툴 정보 표시
-  • debug: 추가로 성능 분석 및 실행 시간 상세 정보 제공
 
 🔧 **사용 가능한 툴**:
   • calculate_saju_tool: 사주팔자 계산
@@ -98,7 +102,7 @@ def print_help():
     """)
 
 
-def print_node_header(node_name: str, is_debug: bool = False):
+def print_node_header(node_name: str, is_debug: bool = False) -> None:
     """노드 헤더 출력 - 모드에 따라 다르게 표시"""
     if is_debug:
         # 디버그 모드: 상세한 설명
@@ -128,7 +132,7 @@ def print_node_header(node_name: str, is_debug: bool = False):
         print("─" * 30)
 
 
-def print_simple_node_info(node_name: str, current_time: str = None):
+def print_simple_node_info(node_name: str, current_time: Optional[str] = None) -> None:
     """기본 모드: 간단한 노드 정보 표시 (시간 포함)"""
     node_info = {
         "Supervisor": "🎯 워크플로 관리",
@@ -142,7 +146,7 @@ def print_simple_node_info(node_name: str, current_time: str = None):
     print(f"\n{info} 중...{time_str}")
 
 
-def print_node_execution(node_name: str):
+def print_node_execution(node_name: str) -> None:
     """디버그 모드: 상세한 노드 실행 정보와 사용 툴 표시"""
     node_tool_info = {
         "Supervisor": ("🎯", "라우팅", "워크플로 관리"),
@@ -158,7 +162,7 @@ def print_node_execution(node_name: str):
     print("─" * 40)
 
 
-def print_completion(is_debug: bool = False):
+def print_completion(is_debug: bool = False) -> None:
     """완료 메시지 출력"""
     if is_debug:
         print("\n" + "=" * 60)
@@ -175,7 +179,7 @@ def print_completion(is_debug: bool = False):
 # 쿼리 처리 관련 함수들
 # ================================
 
-def handle_debug_query(query: str, app, conversation_history: list, session_start_time: str, session_id: str) -> str:
+def handle_debug_query(query: str, app: Any, conversation_history: List[Any], session_start_time: str, session_id: str) -> Optional[str]:
     """성능 분석 쿼리 처리"""
     if not query.startswith("debug:"):
         return None
@@ -207,7 +211,7 @@ def handle_debug_query(query: str, app, conversation_history: list, session_star
     return analysis_info
 
 
-def run_query_with_app(query: str, app, conversation_history: list, session_start_time: str, session_id: str) -> str:
+def run_query_with_app(query: str, app: Any, conversation_history: List[Any], session_start_time: str, session_id: str) -> str:
     """상세 스트리밍 모드: 모든 노드 + 상세 정보 + 툴 추적"""
     print(f"🔍 쿼리 실행: {query}")
     

@@ -22,33 +22,39 @@ from utils import (
     handle_debug_query, run_query_with_app
 )
 
-def main():
+# 로깅 시스템 import
+from logger_config import get_logger
+
+# 로거 인스턴스 생성
+logger = get_logger("Main")
+
+def main() -> None:
     """메인 실행 함수"""
+    logger.info("FortuneAI 시스템 시작")
     print_banner()
     print_system_info()
     
-    # ✨ 시스템 시작 시 AgentState 구조 초기화
-    print("🔧 시스템 초기화 중...")
-    print("  - SajuExpert 에이전트 로딩...")
-    print("  - Search 에이전트 로딩...")
-    print("  - GeneralAnswer 에이전트 로딩...")
-    print("✅ 시스템 초기화 완료!")
-    
-    # ✨ 워크플로도 미리 생성
-    print("⚙️ 워크플로 생성 중...")
-    app = create_workflow()
-    print("✅ 워크플로 준비 완료!")
-    
-    # 세션 및 대화 히스토리 관리
-    conversation_history = []
-    session_start_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    session_id = f"session_{int(time.time())}"
-    query_count = 0
-    
-    print(f"🕐 세션 시작: {session_start_time}")
-    print(f"🆔 세션 ID: {session_id}")
-    
-    print("💬 질문을 입력해주세요 (종료: quit/exit, 도움말: help):")
+    try:
+        logger.info("시스템 초기화 시작")
+
+        app = create_workflow()
+        logger.info("시스템 초기화 완료")
+        
+        conversation_history = []
+        session_start_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        session_id = f"session_{int(time.time())}"
+        query_count = 0
+        
+        print(f"🕐 세션 시작: {session_start_time}")
+        print(f"🆔 세션 ID: {session_id}")
+        logger.session_info(session_id, "시작")
+        
+        print("💬 질문을 입력해주세요 (종료: quit/exit, 도움말: help):")
+        
+    except Exception as e:
+        logger.error(f"시스템 초기화 중 오류: {e}")
+        print("❌ 시스템 초기화 실패. 프로그램을 종료합니다.")
+        return
     
     while True:
         try:
@@ -57,6 +63,8 @@ def main():
             
             # 종료 명령 처리
             if user_input.lower() in ['quit', 'exit', '종료', 'q']:
+                logger.session_info(session_id, "종료")
+                logger.info("사용자 요청으로 프로그램 종료")
                 print("\n👋 FortuneAI를 이용해주셔서 감사합니다!")
                 print("🌟 좋은 하루 되세요! 🌟")
                 break
@@ -88,6 +96,7 @@ def main():
                 continue
             
             query_count += 1
+            logger.info(f"질문 처리 시작 - 질문 #{query_count}: {user_input}")
             print(f"\n⏳ 분석 중... (질문 #{query_count})")
             
             # 성능 분석 모드 처리
@@ -102,14 +111,16 @@ def main():
             execution_time = time.time() - start_time
             
             # 실행 시간 표시
-            print(f"\n⏱️  실행 시간: {execution_time:.2f}초")
+            logger.performance(f"질문 #{query_count}", execution_time, f"질문: {user_input[:50]}...")
             
         except KeyboardInterrupt:
+            logger.warning("사용자가 프로그램 중단")
             print("\n\n⚠️  사용자가 중단했습니다.")
             print("👋 FortuneAI를 이용해주셔서 감사합니다!")
             break
             
         except Exception as e:
+            logger.error(f"메인 루프 실행 중 오류: {e}")
             print(f"\n❌ 오류 발생: {str(e)}")
             print("🔧 시스템을 다시 시도해보세요.")
             continue
