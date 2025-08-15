@@ -222,7 +222,7 @@ export default function SajuPage() {
                     : "bg-white dark:bg-slate-950/90 text-purple-700 dark:text-purple-300 border border-gray-200 dark:border-slate-800 rounded-bl-none ml-[10vw]"}
                 `}
               >
-                <div className="text-sm font-semibold mb-1">
+                <div className="text-sm font-bold mb-1">
                   {message.role === "user" ? "나" : "사주 마스터"}
                 </div>
                 {message.role === "user" ? (
@@ -241,7 +241,7 @@ export default function SajuPage() {
           {isLoading && currentStreamingMessage && (
             <div className="flex w-full mb-8 justify-start" style={{ paddingTop: "0.5rem" }}>
               <div className="max-w-[80vw] px-3 py-2 rounded-2xl shadow-lg bg-white dark:bg-slate-950/90 text-purple-700 dark:text-purple-300 border border-gray-200 dark:border-slate-800 rounded-bl-none ml-[10vw]">
-                <div className="text-sm font-semibold mb-1">사주 마스터</div>
+                <div className="text-sm font-bold mb-1">사주 마스터</div>
                 <div className="whitespace-pre-line">
                   <Markdown>{currentStreamingMessage}</Markdown>
                   <span className="animate-pulse">▋</span>
