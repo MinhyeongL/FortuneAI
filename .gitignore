@@ -181,3 +181,22 @@ output_md/
 *.png
 *.pkl
 *.faiss
+CLAUDE.md
+.claude/
+
+# Node.js
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+# Next.js
+.next/
+out/
+build/
+dist/
+
+# Next.js cache and runtime
+.swc/
+.turbo/
