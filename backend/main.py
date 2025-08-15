@@ -13,7 +13,7 @@ from typing import Annotated, Any, Dict, List, Optional
 
 from langchain_core._api.beta_decorator import warn_beta
 
-from backend import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from langchain_core.messages import HumanMessage, AIMessage
 from langchain_core.messages.ai import AIMessageChunk
