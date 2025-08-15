@@ -7,16 +7,24 @@ import traceback
 import json
 import logging
 from contextlib import asynccontextmanager
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Annotated, Any, Dict, List, Optional
 
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException, status, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from langchain_core.messages import HumanMessage, AIMessage
 from langchain_core.messages.ai import AIMessageChunk
 from langgraph.checkpoint.memory import MemorySaver
 from pydantic import BaseModel
 from websockets.exceptions import ConnectionClosed
+
+# 인증 관련 임포트
+from auth import (
+    UserCreate, UserLogin, Token, User,
+    authenticate_user, create_user, get_current_user, 
+    create_access_token, create_session_token, cleanup_expired_sessions,
+    ACCESS_TOKEN_EXPIRE_MINUTES
+)
 
 
 # 현재 디렉토리를 Python 경로에 추가
@@ -332,6 +340,78 @@ async def root():
             },
         }
     return await _root(request)
+
+
+# 인증 관련 API 엔드포인트들
+@app.post("/api/auth/register", response_model=User)
+async def register(user_data: UserCreate):
+    """사용자 회원가입"""
+    try:
+        # 만료된 세션 정리
+        cleanup_expired_sessions()
+        
+        user = create_user(user_data)
+        if not user:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Email already registered or registration failed"
+            )
+        
+        # 패스워드 해시는 응답에서 제외
+        user.pop("password_hash", None)
+        return user
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Registration failed: {str(e)}"
+        )
+
+@app.post("/api/auth/login", response_model=Token)
+async def login(user_credentials: UserLogin):
+    """사용자 로그인"""
+    try:
+        # 만료된 세션 정리
+        cleanup_expired_sessions()
+        
+        user = authenticate_user(user_credentials.email, user_credentials.password)
+        if not user:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Incorrect email or password",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+        
+        access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+        access_token = create_access_token(
+            data={"sub": str(user["id"])}, expires_delta=access_token_expires
+        )
+        
+        return {"access_token": access_token, "token_type": "bearer"}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Login failed: {str(e)}"
+        )
+
+@app.get("/api/auth/me", response_model=User)
+async def get_current_user_info(current_user: dict = Depends(get_current_user)):
+    """현재 로그인된 사용자 정보 조회"""
+    try:
+        # 패스워드 해시는 응답에서 제외
+        current_user.pop("password_hash", None)
+        return current_user
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to get user info: {str(e)}"
+        )
+
+@app.post("/api/auth/logout")
+async def logout():
+    """사용자 로그아웃 (클라이언트에서 토큰 삭제)"""
+    return {"message": "Successfully logged out"}
 
 
 # 신호 핸들러 (Ctrl+C 처리)
