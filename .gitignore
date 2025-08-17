@@ -200,3 +200,7 @@ dist/
 # Next.js cache and runtime
 .swc/
 .turbo/
+
+CLAUDE.md
+faiss_saju/
+logs/
