@@ -1484,6 +1484,26 @@ files = [
 ]
 
 [[package]]
+name = "duckduckgo-search"
+version = "6.4.2"
+description = "Search for words, documents, images, news, maps and text translation using the DuckDuckGo.com search engine."
+optional = false
+python-versions = ">=3.8"
+groups = ["main"]
+files = [
+    {file = "duckduckgo_search-6.4.2-py3-none-any.whl", hash = "sha256:1e9e64a5379a5330bd99885c053185c9e133eb30f397701fdd6e4f448da1843c"},
+    {file = "duckduckgo_search-6.4.2.tar.gz", hash = "sha256:173c6988cbac1f3ccecc2c645e44e69fc49c4e94c06ee7c09e9dd8ad39d63b0c"},
+]
+
+[package.dependencies]
+click = ">=8.1.7"
+primp = ">=0.9.1"
+
+[package.extras]
+dev = ["mypy (>=1.13.0)", "pytest (>=8.3.4)", "pytest-asyncio (>=0.25.0)", "ruff (>=0.8.3)"]
+lxml = ["lxml (>=5.3.0)"]
+
+[[package]]
 name = "durationpy"
 version = "0.10"
 description = "Module for converting between datetime.timedelta and Go's Duration strings."
@@ -11015,4 +11035,4 @@ type = ["pytest-mypy"]
 [metadata]
 lock-version = "2.1"
 python-versions = ">=3.11,<3.12"
-content-hash = "c265bae738a7580310b7b0b0560304419d8fec599bb4b612e0030daa9fd74429"
+content-hash = "2c718804a055f765fa27c89708e184e55ca51102ef5f10a6a460f600f415ba9d"

@@ -99,6 +99,7 @@ beautifulsoup4 = "^4.13.4"
 python-dateutil = "^2.9.0.post0"
 pytz = "^2025.2"
 ddgs = "^9.4.3"
+duckduckgo-search = "^6.3.0"
 fastapi = {version = "^0.116.0", extras = ["standard"]}
 uvicorn = {version = "^0.35.0", extras = ["standard"]}
 passlib = {version = "^1.7.4", extras = ["bcrypt"]}
