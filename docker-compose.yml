@@ -1,0 +1,44 @@
+version: '3.8'
+
+services:
+  fortune-ai:
+    build: .
+    container_name: fortune-ai-app
+    ports:
+      - "8000:8000"
+    environment:
+      - ENVIRONMENT=production
+      - PYTHONPATH=/app
+    volumes:
+      # 환경변수 파일이 있는 경우 마운트
+      - ./.env:/app/.env:ro
+      # 로그 디렉토리 마운트 (선택사항)
+      - ./logs:/app/logs
+    restart: unless-stopped
+    networks:
+      - fortune-ai-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+  # Redis 캐시 서비스 (선택사항 - 필요시 활성화)
+  # redis:
+  #   image: redis:7-alpine
+  #   container_name: fortune-ai-redis
+  #   ports:
+  #     - "6379:6379"
+  #   volumes:
+  #     - redis_data:/data
+  #   restart: unless-stopped
+  #   networks:
+  #     - fortune-ai-network
+
+networks:
+  fortune-ai-network:
+    driver: bridge
+
+# volumes:
+#   redis_data:
