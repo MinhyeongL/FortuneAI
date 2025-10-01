@@ -10,7 +10,7 @@ from contextlib import asynccontextmanager
 from datetime import datetime, timedelta
 from typing import Annotated, Any, Dict, List, Optional
 
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException, status, Depends
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException, status, Depends, Request
 from fastapi.middleware.cors import CORSMiddleware
 from langchain_core.messages import HumanMessage, AIMessage
 from langchain_core.messages.ai import AIMessageChunk
@@ -287,59 +287,47 @@ async def chat_websocket_saju(websocket: WebSocket, session_id: str):
 
 # API 엔드포인트들
 @app.get("/api/debug/system-status")
-async def system_status():
+async def system_status(request: Request):
     """시스템 상태 확인"""
-    from fastapi import Request
-    async def _system_status(request: Request):
-        app = request.app
-        return {
-            "timestamp": datetime.now().isoformat(),
-            "system_components": {
-                "memory": app.state.memory is not None,
-                "compiled_graph": app.state.compiled_graph is not None,
-            },
-            "sessions": {
-                "saju_total": len(app.state.session_store),
-                "saju_active": len([s for s in app.state.session_store.values() if s["is_active"]]),
-            },
-            "debug_mode": app.state.debug_mode,
-        }
-    return await _system_status(request)
+    return {
+        "timestamp": datetime.now().isoformat(),
+        "system_components": {
+            "memory": request.app.state.memory is not None,
+            "compiled_graph": request.app.state.compiled_graph is not None,
+        },
+        "sessions": {
+            "saju_total": len(request.app.state.session_store),
+            "saju_active": len([s for s in request.app.state.session_store.values() if s["is_active"]]),
+        },
+        "debug_mode": request.app.state.debug_mode,
+    }
 
 
 @app.get("/api/health")
-async def health_check():
+async def health_check(request: Request):
     """헬스 체크"""
-    from fastapi import Request
-    async def _health_check(request: Request):
-        app = request.app
-        return {
-            "status": "healthy",
-            "timestamp": datetime.now().isoformat(),
-            "system_loaded": {
-                "compiled_graph": app.state.compiled_graph is not None,
-                "memory": app.state.memory is not None,
-            },
-        }
-    return await _health_check(request)
+    return {
+        "status": "healthy",
+        "timestamp": datetime.now().isoformat(),
+        "system_loaded": {
+            "compiled_graph": request.app.state.compiled_graph is not None,
+            "memory": request.app.state.memory is not None,
+        },
+    }
 
 
 @app.get("/")
-async def root():
+async def root(request: Request):
     """루트 엔드포인트"""
-    from fastapi import Request
-    async def _root(request: Request):
-        app = request.app
-        return {
-            "message": "🔮 사주 AI API Server",
-            "version": "1.0.0",
-            "debug_mode": app.state.debug_mode,
-            "status": "running",
-            "endpoints": {
-                "saju": "/ws/chat/saju/{session_id}",
-            },
-        }
-    return await _root(request)
+    return {
+        "message": "🔮 사주 AI API Server",
+        "version": "1.0.0",
+        "debug_mode": request.app.state.debug_mode,
+        "status": "running",
+        "endpoints": {
+            "saju": "/ws/chat/saju/{session_id}",
+        },
+    }
 
 
 # 인증 관련 API 엔드포인트들
