@@ -13,12 +13,14 @@ import { Markdown } from "@/components/ui/markdown"
 import { useSajuChatStore } from "@/store/sajuChat"
 import { useSidebarStore } from "@/store/sidebar"
 import { SIDEBAR_WIDTH } from "@/components/layout/Sidebar"
+import { useAuth } from "@/contexts/AuthContext"
 
 export default function SajuPage() {
   const searchParams = useSearchParams()
   const urlSessionId = searchParams.get("session_id")
   const [sessionId, setSessionId] = useState<string>("")
   const [isSessionReady, setIsSessionReady] = useState(false)
+  const { user } = useAuth()  // AuthContext에서 user 가져오기
 
   // 최초 1회만 session ID 생성/설정
   useEffect(() => {
@@ -42,19 +44,30 @@ export default function SajuPage() {
     setIsSessionReady(true)
   }, [urlSessionId]) // urlSessionId가 변경될 때만 실행
 
-  const { 
-    messages, 
-    addMessage, 
-    isLoading, 
-    setIsLoading, 
+  const {
+    messages,
+    addMessage,
+    isLoading,
+    setIsLoading,
     sendMessage,
     isConnected,
     currentStreamingMessage,
     disconnect,
     reset,
     setCurrentSessionId,
+    setCurrentUserId,  // userId setter 추가
     lastJsonData
   } = useSajuChatStore()
+
+  // user가 변경되면 userId 설정
+  useEffect(() => {
+    if (user) {
+      setCurrentUserId(user.id)
+      console.log('사용자 ID 설정:', user.id)
+    } else {
+      setCurrentUserId(null)
+    }
+  }, [user, setCurrentUserId])
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const scrollAreaRef = useRef<HTMLDivElement>(null)
   const isSidebarOpen = useSidebarStore((state) => state.isOpen)

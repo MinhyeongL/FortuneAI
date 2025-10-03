@@ -3,11 +3,16 @@
 import React, { createContext, useContext, useEffect, useState, ReactNode } from 'react'
 
 interface User {
-  id: number
+  id: string  // UUID
   email: string
   name: string
-  birth_date?: string
-  birth_time?: string
+  birth_year: number
+  birth_month: number
+  birth_day: number
+  birth_hour: number
+  birth_minute: number
+  is_male: boolean
+  is_leap_month: boolean
   birth_location?: string
   created_at: string
   last_login?: string

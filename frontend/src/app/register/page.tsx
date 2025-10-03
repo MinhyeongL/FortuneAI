@@ -18,8 +18,13 @@ export default function RegisterPage() {
     password: "",
     confirmPassword: "",
     name: "",
-    birth_date: "",
-    birth_time: "",
+    birth_year: "",
+    birth_month: "",
+    birth_day: "",
+    birth_hour: "",
+    birth_minute: "0",
+    is_male: true,
+    is_leap_month: false,
     birth_location: "",
   })
 
@@ -43,8 +48,13 @@ export default function RegisterPage() {
         email: formData.email,
         password: formData.password,
         name: formData.name,
-        birth_date: formData.birth_date || null,
-        birth_time: formData.birth_time || null,
+        birth_year: parseInt(formData.birth_year),
+        birth_month: parseInt(formData.birth_month),
+        birth_day: parseInt(formData.birth_day),
+        birth_hour: parseInt(formData.birth_hour),
+        birth_minute: parseInt(formData.birth_minute),
+        is_male: formData.is_male,
+        is_leap_month: formData.is_leap_month,
         birth_location: formData.birth_location || null,
       }
 
@@ -149,27 +159,126 @@ export default function RegisterPage() {
                 disabled={isLoading}
               />
             </div>
-            <div className="space-y-2">
-              <Label htmlFor="birth_date">생년월일 (선택사항)</Label>
-              <Input
-                id="birth_date"
-                name="birth_date"
-                type="date"
-                value={formData.birth_date}
-                onChange={handleChange}
-                disabled={isLoading}
-              />
+            <div className="grid grid-cols-3 gap-2">
+              <div className="space-y-2">
+                <Label htmlFor="birth_year">년도 *</Label>
+                <Input
+                  id="birth_year"
+                  name="birth_year"
+                  type="number"
+                  placeholder="1990"
+                  min="1900"
+                  max="2100"
+                  value={formData.birth_year}
+                  onChange={handleChange}
+                  required
+                  disabled={isLoading}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="birth_month">월 *</Label>
+                <Input
+                  id="birth_month"
+                  name="birth_month"
+                  type="number"
+                  placeholder="5"
+                  min="1"
+                  max="12"
+                  value={formData.birth_month}
+                  onChange={handleChange}
+                  required
+                  disabled={isLoading}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="birth_day">일 *</Label>
+                <Input
+                  id="birth_day"
+                  name="birth_day"
+                  type="number"
+                  placeholder="15"
+                  min="1"
+                  max="31"
+                  value={formData.birth_day}
+                  onChange={handleChange}
+                  required
+                  disabled={isLoading}
+                />
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <div className="space-y-2">
+                <Label htmlFor="birth_hour">시 *</Label>
+                <Input
+                  id="birth_hour"
+                  name="birth_hour"
+                  type="number"
+                  placeholder="14"
+                  min="0"
+                  max="23"
+                  value={formData.birth_hour}
+                  onChange={handleChange}
+                  required
+                  disabled={isLoading}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="birth_minute">분 *</Label>
+                <Input
+                  id="birth_minute"
+                  name="birth_minute"
+                  type="number"
+                  placeholder="30"
+                  min="0"
+                  max="59"
+                  value={formData.birth_minute}
+                  onChange={handleChange}
+                  required
+                  disabled={isLoading}
+                />
+              </div>
             </div>
             <div className="space-y-2">
-              <Label htmlFor="birth_time">출생시간 (선택사항)</Label>
-              <Input
-                id="birth_time"
-                name="birth_time"
-                type="time"
-                value={formData.birth_time}
-                onChange={handleChange}
-                disabled={isLoading}
-              />
+              <Label htmlFor="is_male">성별 *</Label>
+              <div className="flex gap-4">
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="radio"
+                    name="is_male"
+                    value="true"
+                    checked={formData.is_male === true}
+                    onChange={() => setFormData(prev => ({ ...prev, is_male: true }))}
+                    disabled={isLoading}
+                    className="cursor-pointer"
+                  />
+                  <span>남성</span>
+                </label>
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="radio"
+                    name="is_male"
+                    value="false"
+                    checked={formData.is_male === false}
+                    onChange={() => setFormData(prev => ({ ...prev, is_male: false }))}
+                    disabled={isLoading}
+                    className="cursor-pointer"
+                  />
+                  <span>여성</span>
+                </label>
+              </div>
+            </div>
+            <div className="space-y-2">
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  name="is_leap_month"
+                  checked={formData.is_leap_month}
+                  onChange={(e) => setFormData(prev => ({ ...prev, is_leap_month: e.target.checked }))}
+                  disabled={isLoading}
+                  className="cursor-pointer"
+                />
+                <span className="text-sm">윤달 여부</span>
+              </label>
             </div>
             <div className="space-y-2">
               <Label htmlFor="birth_location">출생지 (선택사항)</Label>
@@ -177,7 +286,7 @@ export default function RegisterPage() {
                 id="birth_location"
                 name="birth_location"
                 type="text"
-                placeholder="출생지를 입력하세요"
+                placeholder="서울"
                 value={formData.birth_location}
                 onChange={handleChange}
                 disabled={isLoading}

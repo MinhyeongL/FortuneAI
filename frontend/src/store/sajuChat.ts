@@ -15,6 +15,7 @@ interface ChatStoreType {
   currentStreamingMessage: string
   wsManager: WebSocketManager | null
   currentSessionId: string | null
+  currentUserId: string | null  // userId 추가
   // JSON 데이터 저장용
   lastJsonData: any | null
   addMessage: (role: "user" | "assistant", content: string) => void
@@ -26,6 +27,7 @@ interface ChatStoreType {
   sendMessage: (content: string) => Promise<void>
   disconnect: () => void
   setCurrentSessionId: (sessionId: string) => void
+  setCurrentUserId: (userId: string | null) => void  // userId setter 추가
   setLastJsonData: (data: any) => void
 }
 
@@ -36,6 +38,7 @@ export const useSajuChatStore = create<ChatStoreType>((set, get) => ({
   currentStreamingMessage: "",
   wsManager: null,
   currentSessionId: null,
+  currentUserId: null,  // userId 초기화
   lastJsonData: null,
   addMessage: (role, content) =>
     set((state) => ({
@@ -65,7 +68,7 @@ export const useSajuChatStore = create<ChatStoreType>((set, get) => ({
     }
   },
   sendMessage: async (content: string) => {
-    const { addMessage, setIsLoading, setCurrentStreamingMessage, appendToStreamingMessage, setIsConnected, wsManager, currentSessionId, setLastJsonData } = get()
+    const { addMessage, setIsLoading, setCurrentStreamingMessage, appendToStreamingMessage, setIsConnected, wsManager, currentSessionId, currentUserId, setLastJsonData } = get()
     
     // sessionId가 없으면 에러
     if (!currentSessionId) {
@@ -110,8 +113,8 @@ export const useSajuChatStore = create<ChatStoreType>((set, get) => ({
         wsManager.disconnect()
       }
 
-      // 새로운 WebSocket 연결 (currentSessionId를 path로)
-      const wsUrl = getWebSocketUrl("saju", currentSessionId)
+      // 새로운 WebSocket 연결 (currentSessionId를 path로, userId를 쿼리 파라미터로)
+      const wsUrl = getWebSocketUrl("saju", currentSessionId, currentUserId || undefined)
       console.log('사주 채팅 WebSocket 연결 시도:', wsUrl)
       
       const newWsManager = new WebSocketManager(
@@ -221,5 +224,6 @@ export const useSajuChatStore = create<ChatStoreType>((set, get) => ({
     }
   },
   setCurrentSessionId: (sessionId) => set({ currentSessionId: sessionId }),
+  setCurrentUserId: (userId) => set({ currentUserId: userId }),
   setLastJsonData: (data) => set({ lastJsonData: data })
 }))
