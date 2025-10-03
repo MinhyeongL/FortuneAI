@@ -21,9 +21,21 @@ from websockets.exceptions import ConnectionClosed
 # 인증 관련 임포트
 from auth import (
     UserCreate, UserLogin, Token, User,
-    authenticate_user, create_user, get_current_user, 
+    authenticate_user, create_user, get_current_user,
     create_access_token, create_session_token, cleanup_expired_sessions,
     ACCESS_TOKEN_EXPIRE_MINUTES
+)
+
+# 데이터베이스 관련 임포트
+from database import (
+    get_user_by_id,
+    get_saju_info_by_user_id,
+    create_conversation,
+    get_conversation_by_session_id,
+    update_conversation_query_count,
+    create_message,
+    get_conversation_messages,
+    get_user_conversations
 )
 
 
@@ -199,12 +211,33 @@ async def chat_websocket_saju(websocket: WebSocket, session_id: str):
     debug_log = lambda message, level="INFO": _debug_log(message, level, websocket.app)
     debug_log(f"🔌 사주 WebSocket 연결 요청: {session_id}")
 
+    # 쿼리 파라미터에서 user_id 추출
+    user_id = websocket.query_params.get("user_id")
+    if user_id:
+        debug_log(f"👤 사용자 ID: {user_id}")
+
     try:
         await websocket.accept()
         debug_log(f"✅ 사주 WebSocket 연결 성공: {session_id}")
 
         session_data = get_or_create_session(websocket.app, session_id)
         message_queue = asyncio.Queue()
+
+        # 대화 세션 DB에 생성 (user_id가 있는 경우에만)
+        conversation_id = None
+        if user_id:
+            try:
+                conversation = get_conversation_by_session_id(session_id)
+                if not conversation:
+                    conversation = create_conversation(
+                        user_id=user_id,
+                        session_id=session_id
+                    )
+                if conversation:
+                    conversation_id = conversation["id"]
+                    debug_log(f"📝 대화 세션 생성/조회 완료: {conversation_id}")
+            except Exception as e:
+                debug_log(f"⚠️ 대화 세션 생성 실패 (비회원으로 진행): {e}", "WARN")
 
         # 메시지 수신 태스크
         async def receive_messages():
@@ -226,10 +259,24 @@ async def chat_websocket_saju(websocket: WebSocket, session_id: str):
                 session_data["query_count"] += 1
                 session_data["messages"].append(HumanMessage(content=user_input))
                 debug_log(f"🔄 쿼리 #{session_data['query_count']} 처리 시작")
+
+                # 사용자 메시지 DB 저장
+                if conversation_id:
+                    try:
+                        create_message(
+                            conversation_id=conversation_id,
+                            role="user",
+                            content=user_input
+                        )
+                        update_conversation_query_count(conversation_id)
+                    except Exception as e:
+                        debug_log(f"⚠️ 메시지 저장 실패: {e}", "WARN")
+
                 send_to_frontend = False
+                assistant_response = ""
                 try:
                     compiled_graph = websocket.app.state.compiled_graph
-                    
+
                     async for event in compiled_graph.astream_events(
                         session_data,
                         config={"configurable": {"thread_id": session_id}},
@@ -251,10 +298,25 @@ async def chat_websocket_saju(websocket: WebSocket, session_id: str):
                         if kind == "on_chat_model_stream" and send_to_frontend:
                             data = event["data"]
                             if data["chunk"].content:
+                                chunk_content = str(data["chunk"].content)
+                                assistant_response += chunk_content
                                 await websocket.send_json({
                                     "type": "stream",
-                                    "content": str(data["chunk"].content)
+                                    "content": chunk_content
                                 })
+
+                    # 어시스턴트 응답 DB 저장
+                    if conversation_id and assistant_response:
+                        try:
+                            create_message(
+                                conversation_id=conversation_id,
+                                role="assistant",
+                                content=assistant_response,
+                                query_type="saju"
+                            )
+                        except Exception as e:
+                            debug_log(f"⚠️ 응답 저장 실패: {e}", "WARN")
+
                     await websocket.send_json({
                         "type": "complete",
                         "content": f"✅ 사주 분석 완료 (질문 #{session_data['query_count']})"
@@ -262,10 +324,23 @@ async def chat_websocket_saju(websocket: WebSocket, session_id: str):
 
                 except Exception as e:
                     debug_log(f"❌ LangGraph 처리 오류: {e}", "ERROR")
+                    error_msg = f"❌ 사주 분석 중 오류가 발생했습니다: {str(e)}"
                     await websocket.send_json({
                         "type": "error",
-                        "content": f"❌ 사주 분석 중 오류가 발생했습니다: {str(e)}"
+                        "content": error_msg
                     })
+
+                    # 에러 메시지도 저장
+                    if conversation_id:
+                        try:
+                            create_message(
+                                conversation_id=conversation_id,
+                                role="assistant",
+                                content=error_msg,
+                                query_type="error"
+                            )
+                        except Exception as e:
+                            debug_log(f"⚠️ 에러 메시지 저장 실패: {e}", "WARN")
 
         # 두 태스크를 동시에 실행
         receive_task = asyncio.create_task(receive_messages())
@@ -400,6 +475,63 @@ async def get_current_user_info(current_user: dict = Depends(get_current_user)):
 async def logout():
     """사용자 로그아웃 (클라이언트에서 토큰 삭제)"""
     return {"message": "Successfully logged out"}
+
+# 대화 이력 관련 API 엔드포인트들
+@app.get("/api/conversations")
+async def get_conversations(current_user: dict = Depends(get_current_user)):
+    """사용자의 대화 목록 조회"""
+    try:
+        conversations = get_user_conversations(current_user["id"], limit=50)
+        return {"conversations": conversations}
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to get conversations: {str(e)}"
+        )
+
+@app.get("/api/conversations/{conversation_id}/messages")
+async def get_conversation_messages_api(
+    conversation_id: str,
+    current_user: dict = Depends(get_current_user)
+):
+    """특정 대화의 메시지 목록 조회"""
+    try:
+        # 대화가 해당 사용자의 것인지 확인
+        conversation = get_conversation_by_session_id(conversation_id)
+        if not conversation or conversation["user_id"] != current_user["id"]:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Access denied"
+            )
+
+        messages = get_conversation_messages(conversation["id"], limit=100)
+        return {"messages": messages}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to get messages: {str(e)}"
+        )
+
+@app.get("/api/users/me/saju")
+async def get_user_saju_info(current_user: dict = Depends(get_current_user)):
+    """현재 사용자의 사주 정보 조회"""
+    try:
+        saju_info = get_saju_info_by_user_id(current_user["id"])
+        if not saju_info:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Saju info not found"
+            )
+        return saju_info
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to get saju info: {str(e)}"
+        )
 
 
 # 신호 핸들러 (Ctrl+C 처리)
