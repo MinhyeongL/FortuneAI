@@ -12,6 +12,19 @@ from passlib.context import CryptContext
 from jose import JWTError, jwt
 from pydantic import BaseModel
 
+# Supabase database 임포트
+from database import (
+    get_user_by_email as db_get_user_by_email,
+    get_user_by_id as db_get_user_by_id,
+    create_user_db,
+    update_user_last_login,
+    create_session,
+    get_session_by_token,
+    delete_expired_sessions,
+    create_saju_info,
+    get_saju_info_by_user_id
+)
+
 # 패스워드 해싱 설정
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
@@ -41,8 +54,14 @@ class UserCreate(BaseModel):
     email: str
     password: str
     name: str
-    birth_date: Optional[str] = None
-    birth_time: Optional[str] = None
+    # 출생 정보 (필수)
+    birth_year: int
+    birth_month: int
+    birth_day: int
+    birth_hour: int
+    birth_minute: int = 0
+    is_male: bool
+    is_leap_month: bool = False
     birth_location: Optional[str] = None
 
 class UserLogin(BaseModel):
@@ -54,11 +73,16 @@ class Token(BaseModel):
     token_type: str
 
 class User(BaseModel):
-    id: int
+    id: str  # UUID
     email: str
     name: str
-    birth_date: Optional[str]
-    birth_time: Optional[str]
+    birth_year: int
+    birth_month: int
+    birth_day: int
+    birth_hour: int
+    birth_minute: int
+    is_male: bool
+    is_leap_month: bool
     birth_location: Optional[str]
     created_at: str
     last_login: Optional[str]
@@ -86,89 +110,70 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
 
 def get_user_by_email(email: str) -> Optional[Dict[str, Any]]:
     """이메일로 사용자를 조회합니다."""
-    try:
-        conn = sqlite3.connect(DATABASE_PATH)
-        cursor = conn.cursor()
-        cursor.execute(
-            "SELECT id, email, password_hash, name, birth_date, birth_time, birth_location, created_at, last_login, is_active, premium_until FROM users WHERE email = ?",
-            (email,)
-        )
-        result = cursor.fetchone()
-        conn.close()
-        
-        if result:
-            return {
-                "id": result[0],
-                "email": result[1],
-                "password_hash": result[2],
-                "name": result[3],
-                "birth_date": result[4],
-                "birth_time": result[5],
-                "birth_location": result[6],
-                "created_at": result[7],
-                "last_login": result[8],
-                "is_active": result[9],
-                "premium_until": result[10]
-            }
-        return None
-    except Exception as e:
-        print(f"Database error: {e}")
-        return None
+    return db_get_user_by_email(email)
 
-def get_user_by_id(user_id: int) -> Optional[Dict[str, Any]]:
+def get_user_by_id(user_id: str) -> Optional[Dict[str, Any]]:
     """ID로 사용자를 조회합니다."""
-    try:
-        conn = sqlite3.connect(DATABASE_PATH)
-        cursor = conn.cursor()
-        cursor.execute(
-            "SELECT id, email, password_hash, name, birth_date, birth_time, birth_location, created_at, last_login, is_active, premium_until FROM users WHERE id = ?",
-            (user_id,)
-        )
-        result = cursor.fetchone()
-        conn.close()
-        
-        if result:
-            return {
-                "id": result[0],
-                "email": result[1],
-                "password_hash": result[2],
-                "name": result[3],
-                "birth_date": result[4],
-                "birth_time": result[5],
-                "birth_location": result[6],
-                "created_at": result[7],
-                "last_login": result[8],
-                "is_active": result[9],
-                "premium_until": result[10]
-            }
-        return None
-    except Exception as e:
-        print(f"Database error: {e}")
-        return None
+    return db_get_user_by_id(user_id)
 
 def create_user(user_data: UserCreate) -> Optional[Dict[str, Any]]:
-    """새 사용자를 생성합니다."""
+    """새 사용자를 생성하고 사주를 계산합니다."""
     try:
         # 이메일 중복 확인
         if get_user_by_email(user_data.email):
             return None
-        
+
         # 패스워드 해시화
         password_hash = get_password_hash(user_data.password)
-        
-        conn = sqlite3.connect(DATABASE_PATH)
-        cursor = conn.cursor()
-        cursor.execute(
-            """INSERT INTO users (email, password_hash, name, birth_date, birth_time, birth_location) 
-               VALUES (?, ?, ?, ?, ?, ?)""",
-            (user_data.email, password_hash, user_data.name, 
-             user_data.birth_date, user_data.birth_time, user_data.birth_location)
+
+        # 사용자 생성
+        user = create_user_db(
+            email=user_data.email,
+            password_hash=password_hash,
+            name=user_data.name,
+            birth_year=user_data.birth_year,
+            birth_month=user_data.birth_month,
+            birth_day=user_data.birth_day,
+            birth_hour=user_data.birth_hour,
+            birth_minute=user_data.birth_minute,
+            is_male=user_data.is_male,
+            is_leap_month=user_data.is_leap_month,
+            birth_location=user_data.birth_location
         )
-        user_id = cursor.lastrowid
-        conn.commit()
-        conn.close()
-        
-        return get_user_by_id(user_id)
+
+        if not user:
+            return None
+
+        # 사주 계산 및 저장
+        try:
+            from saju_calculator import SajuCalculator
+            calculator = SajuCalculator()
+            saju_chart = calculator.calculate_saju(
+                year=user_data.birth_year,
+                month=user_data.birth_month,
+                day=user_data.birth_day,
+                hour=user_data.birth_hour,
+                minute=user_data.birth_minute,
+                is_male=user_data.is_male,
+                is_leap_month=user_data.is_leap_month
+            )
+
+            # 사주 정보 DB에 저장
+            create_saju_info(
+                user_id=user["id"],
+                year_pillar=str(saju_chart.year_pillar),
+                month_pillar=str(saju_chart.month_pillar),
+                day_pillar=str(saju_chart.day_pillar),
+                hour_pillar=str(saju_chart.hour_pillar),
+                day_master=saju_chart.get_day_master(),
+                age=saju_chart.age,
+                korean_age=saju_chart.korean_age
+            )
+        except Exception as e:
+            print(f"Failed to calculate saju: {e}")
+            # 사주 계산 실패해도 사용자 생성은 성공으로 처리
+
+        return user
     except Exception as e:
         print(f"Database error: {e}")
         return None
@@ -182,20 +187,13 @@ def authenticate_user(email: str, password: str) -> Optional[Dict[str, Any]]:
         return None
     if not user["is_active"]:
         return None
-    
-    # 마지막 로그인 시간 업데이트 (한국 시간)
+
+    # 마지막 로그인 시간 업데이트
     try:
-        conn = sqlite3.connect(DATABASE_PATH)
-        cursor = conn.cursor()
-        cursor.execute(
-            "UPDATE users SET last_login = ? WHERE id = ?",
-            (get_kst_datetime_str(), user["id"],)
-        )
-        conn.commit()
-        conn.close()
+        update_user_last_login(user["id"])
     except Exception as e:
         print(f"Failed to update last login: {e}")
-    
+
     return user
 
 def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security)) -> Dict[str, Any]:
@@ -232,20 +230,17 @@ def get_current_active_user(current_user: Dict[str, Any] = Depends(get_current_u
         raise HTTPException(status_code=400, detail="Inactive user")
     return current_user
 
-def create_session_token(user_id: int) -> str:
+def create_session_token(user_id: str) -> str:
     """세션 토큰을 생성하고 데이터베이스에 저장합니다."""
     session_token = secrets.token_urlsafe(32)
     expires_at = get_kst_now() + timedelta(days=7)  # 7일 후 만료 (한국 시간)
-    
+
     try:
-        conn = sqlite3.connect(DATABASE_PATH)
-        cursor = conn.cursor()
-        cursor.execute(
-            "INSERT INTO user_sessions (user_id, session_token, expires_at) VALUES (?, ?, ?)",
-            (user_id, session_token, expires_at.strftime('%Y-%m-%d %H:%M:%S'))
+        create_session(
+            user_id=user_id,
+            session_token=session_token,
+            expires_at=expires_at.isoformat()
         )
-        conn.commit()
-        conn.close()
         return session_token
     except Exception as e:
         print(f"Failed to create session token: {e}")
@@ -254,33 +249,18 @@ def create_session_token(user_id: int) -> str:
 def validate_session_token(session_token: str) -> Optional[Dict[str, Any]]:
     """세션 토큰을 검증하고 사용자 정보를 반환합니다."""
     try:
-        conn = sqlite3.connect(DATABASE_PATH)
-        cursor = conn.cursor()
-        cursor.execute(
-            """SELECT us.user_id, us.expires_at, u.id, u.email, u.name, u.birth_date, u.birth_time, 
-                      u.birth_location, u.created_at, u.last_login, u.is_active, u.premium_until
-               FROM user_sessions us 
-               JOIN users u ON us.user_id = u.id 
-               WHERE us.session_token = ? AND us.expires_at > ?""",
-            (session_token, get_kst_datetime_str())
-        )
-        result = cursor.fetchone()
-        conn.close()
-        
-        if result:
-            return {
-                "id": result[2],
-                "email": result[3],
-                "name": result[4],
-                "birth_date": result[5],
-                "birth_time": result[6],
-                "birth_location": result[7],
-                "created_at": result[8],
-                "last_login": result[9],
-                "is_active": result[10],
-                "premium_until": result[11]
-            }
-        return None
+        session = get_session_by_token(session_token)
+        if not session:
+            return None
+
+        # 세션 만료 확인
+        expires_at = datetime.fromisoformat(session["expires_at"])
+        if expires_at < get_kst_now():
+            return None
+
+        # 사용자 정보 조회
+        user = get_user_by_id(session["user_id"])
+        return user
     except Exception as e:
         print(f"Session validation error: {e}")
         return None
@@ -288,13 +268,6 @@ def validate_session_token(session_token: str) -> Optional[Dict[str, Any]]:
 def cleanup_expired_sessions():
     """만료된 세션을 정리합니다."""
     try:
-        conn = sqlite3.connect(DATABASE_PATH)
-        cursor = conn.cursor()
-        cursor.execute(
-            "DELETE FROM user_sessions WHERE expires_at < ?",
-            (get_kst_datetime_str(),)
-        )
-        conn.commit()
-        conn.close()
+        delete_expired_sessions()
     except Exception as e:
         print(f"Failed to cleanup expired sessions: {e}")
